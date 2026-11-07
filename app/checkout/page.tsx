@@ -160,7 +160,8 @@ export default function CheckoutPage() {
   const [couponError, setCouponError] = useState("")
   const [applyingCoupon, setApplyingCoupon] = useState(false)
 
-  const shipping = totalPrice >= 999 ? 0 : 199
+  // Temporarily 0 for all orders (Free Shipping) — to restore: totalPrice >= 999 ? 0 : 199
+  const shipping = 0
 
   // Calculate discount using backend supplied amount
   const discount = appliedCoupon ? appliedCoupon.discountAmount : 0
@@ -731,10 +732,14 @@ export default function CheckoutPage() {
       onDismiss: () => {
         clearCheckoutLoadingStates()
         patchAttempt(scope, { phase: "awaiting_payment" })
-        toast.info("Payment window closed. Tap 'Resume Payment' whenever you are ready to complete your purchase.")
+        toast.error("Payment Cancelled: You closed the payment window before completing the transaction. Tap 'Resume Payment' to complete your order.", {
+          duration: 6000,
+        })
       },
       onFailure: (response: any) => {
-        toast.error(response?.error?.description || "Payment did not complete. You can retry with another method, or it will be reconciled automatically.")
+        toast.error(response?.error?.description || "Payment did not complete. You can retry with another method, or it will be reconciled automatically.", {
+          duration: 6000,
+        })
         clearCheckoutLoadingStates()
       },
       onOpened: () => {
