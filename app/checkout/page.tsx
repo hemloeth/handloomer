@@ -77,6 +77,7 @@ export default function CheckoutPage() {
   ]
 
   const [orderPlaced, setOrderPlaced] = useState(false)
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false)
   // Scroll to top automatically when order is successfully placed
   useEffect(() => {
     if (orderPlaced) {
@@ -357,6 +358,7 @@ export default function CheckoutPage() {
     setPendingOrder(null)
     if (linesToSettle) removePurchasedItems(linesToSettle)
     setPlacedOrderId(orderId)
+    setIsVerifyingPayment(false)
     setOrderPlaced(true)
   }
 
@@ -642,6 +644,7 @@ export default function CheckoutPage() {
 
   // Shared helper to clear checkout loading states across all flows (initial, resume, recheck)
   const clearCheckoutLoadingStates = (identity?: CheckoutOperationIdentity | ModalSession | null) => {
+    setIsVerifyingPayment(false)
     return clearCheckoutLoadingStatesHelper(
       scope,
       retryManagerRef.current,
@@ -680,6 +683,7 @@ export default function CheckoutPage() {
       },
       onVerify: async (response: any, verifyOp: CheckoutOperationIdentity) => {
         try {
+          setIsVerifyingPayment(true)
           setIsPlacingOrder(true)
           patchAttempt(scope, { phase: "awaiting_verify" })
           const body: any = {
@@ -1083,7 +1087,7 @@ export default function CheckoutPage() {
     )
   }
 
-  if (items.length === 0 && !orderPlaced && !paymentPending) {
+  if (items.length === 0 && !orderPlaced && !paymentPending && !isVerifyingPayment) {
     return (
       <main className="min-h-screen">
         <Header />
@@ -1106,6 +1110,42 @@ export default function CheckoutPage() {
     )
   }
 
+  // Modern full-screen verification loader: shown immediately after modal closes while confirming with bank
+  if (isVerifyingPayment && !orderPlaced) {
+    return (
+      <main className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <div 
+          className="flex-1 flex items-center justify-center px-4 md:px-8 pb-16"
+          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+        >
+          <div className="text-center px-6 py-12 max-w-md w-full bg-card rounded-2xl border border-primary/20 shadow-xl animate-in fade-in zoom-in-95 duration-300">
+            <div className="relative w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping opacity-60" />
+              <div className="absolute inset-0 rounded-full border-4 border-t-primary border-r-transparent border-b-primary/40 border-l-transparent animate-spin" />
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <ShieldCheck className="w-6 h-6 animate-pulse" />
+              </div>
+            </div>
+
+            <h2 className="font-serif text-2xl font-bold mb-2 tracking-tight text-foreground">
+              Confirming Your Payment
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              We're securely confirming your transaction with the bank and preparing your order. Please do not refresh.
+            </p>
+
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/5 border border-primary/15 text-xs text-primary font-medium">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Secured by Razorpay &bull; Finalizing Order</span>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    )
+  }
+
   if (orderPlaced) {
     return (
       <main className="min-h-screen flex flex-col">
@@ -1114,43 +1154,44 @@ export default function CheckoutPage() {
           className="flex-1 flex items-center justify-center px-4 md:px-8 pb-16"
           style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
         >
-          <div className="text-center px-4 max-w-md">
-            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="w-10 h-10 text-primary" />
+          <div className="text-center px-6 py-10 max-w-md w-full bg-card rounded-2xl border border-border/80 shadow-md animate-in fade-in zoom-in-95 duration-500">
+            <div className="w-20 h-20 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Check className="w-10 h-10 text-emerald-600" />
             </div>
-            <h1 className="font-serif text-3xl mb-4">Order Confirmed!</h1>
-            <p className="text-muted-foreground mb-2">
-              Thank you for your order. We have queued your confirmation email to{" "}
-              <span className="font-medium text-foreground">
+            <span className="text-xs font-bold tracking-widest uppercase text-primary/80 mb-1 inline-block">Payment Successful</span>
+            <h1 className="font-serif text-3xl font-bold mb-3">Congratulations!</h1>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              Your order has been placed successfully. A confirmation email has been queued to{" "}
+              <span className="font-semibold text-foreground">
                 {authoritativeOrder?.shippingAddress?.email || formData.email || "your email"}
               </span>.
             </p>
-            <div className="bg-muted/50 rounded-lg p-6 mb-8 text-left space-y-3 border border-border">
-              <div className="flex justify-between">
+            <div className="bg-muted/50 rounded-xl p-5 mb-6 text-left space-y-3 border border-border/80">
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Order ID</span>
-                <span className="font-medium">#{authoritativeOrder?.orderId || placedOrderId || "Processing..."}</span>
+                <span className="font-semibold font-mono">#{authoritativeOrder?.orderId || placedOrderId || "Processing..."}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Payment Method</span>
                 <span className="font-medium">
                   {(authoritativeOrder?.payment?.method || formData.paymentMethod) === "cod" ? "Cash on Delivery" : "Paid Online (Razorpay)"}
                 </span>
               </div>
               {authoritativeOrder?.pricing?.total !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Amount</span>
-                  <span className="font-medium">₹{authoritativeOrder.pricing.total}</span>
+                <div className="flex justify-between text-sm pt-2 border-t border-border/60">
+                  <span className="text-muted-foreground font-medium">Total Amount</span>
+                  <span className="font-bold text-base text-primary">₹{Number(authoritativeOrder.pricing.total).toLocaleString('en-IN')}</span>
                 </div>
               )}
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <Link href={`/track-order?orderId=${encodeURIComponent(placedOrderId)}&email=${encodeURIComponent(formData.email || "")}`} className="w-full sm:w-auto">
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 w-full sm:w-auto h-11">
                   Track This Order
                 </Button>
               </Link>
               <Link href="/collections" className="w-full sm:w-auto">
-                <Button className="bg-primary hover:bg-primary/90 w-full sm:w-auto">
+                <Button className="bg-primary hover:bg-primary/90 w-full sm:w-auto h-11 font-medium">
                   Continue Shopping
                 </Button>
               </Link>
