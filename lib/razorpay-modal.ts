@@ -273,6 +273,8 @@ export async function openRazorpayModal(params: OpenRazorpayModalParams): Promis
       },
     }
 
+    let isPaymentCompletedOrVerifying = false
+
     const options = {
       key: key || (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID : "") || "",
       amount,
@@ -282,6 +284,7 @@ export async function openRazorpayModal(params: OpenRazorpayModalParams): Promis
       order_id: razorpayOrderId,
       config,
       handler: async function (response: any) {
+        isPaymentCompletedOrVerifying = true
         if (!retryManager.isModalSessionValid(modalSession)) return
         const verifyOp = retryManager.startVerificationFromModal(modalSession!)
         if (!verifyOp) return // duplicate callback deduplicated
@@ -297,6 +300,10 @@ export async function openRazorpayModal(params: OpenRazorpayModalParams): Promis
       },
       modal: {
         ondismiss: function () {
+          if (isPaymentCompletedOrVerifying) {
+            settleOnce()
+            return
+          }
           if (!retryManager.isModalSessionValid(modalSession)) {
             settleOnce()
             return
@@ -306,6 +313,10 @@ export async function openRazorpayModal(params: OpenRazorpayModalParams): Promis
           settleOnce()
         },
         onhidden: function () {
+          if (isPaymentCompletedOrVerifying) {
+            settleOnce()
+            return
+          }
           if (retryManager.isModalSessionValid(modalSession)) {
             retryManager.endModalSession(modalSession!)
             onDismiss()

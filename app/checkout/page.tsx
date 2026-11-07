@@ -729,7 +729,34 @@ export default function CheckoutPage() {
           }
         }
       },
-      onDismiss: () => {
+      onDismiss: async () => {
+        // Fast verification check: Did payment complete via webhook or mobile UPI app?
+        const a = loadAttempt(scope)
+        const orderId = params.orderId || a?.orderId
+        const token = params.token || a?.checkoutToken || a?.recoverySecret
+        if (orderId) {
+          try {
+            const checkData = await apiPost('/api/order/verify-payment', {
+              orderId,
+              checkoutToken: token,
+            })
+            if (checkData?.status === "paid" || checkData?.outcome === "paid") {
+              const op = retryManagerRef.current.startOperation(scope, orderId)
+              if (op) {
+                await applyResolvedOutcome(checkData, {
+                  orderId,
+                  token,
+                  dbId: params.dbId,
+                  purchasedLines: params.purchasedLines,
+                }, op)
+                return
+              }
+            }
+          } catch {
+            // Dismissed without payment or check errored
+          }
+        }
+
         clearCheckoutLoadingStates()
         patchAttempt(scope, { phase: "awaiting_payment" })
         toast.error("Payment Cancelled: You closed the payment window before completing the transaction. Tap 'Resume Payment' to complete your order.", {
