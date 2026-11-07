@@ -110,6 +110,11 @@ export default function CartPage() {
                               <p className="text-sm text-muted-foreground">
                                 Color: {item.product.color}
                               </p>
+                              {typeof (item.product as any).stock === 'number' && (item.product as any).stock <= 0 && (
+                                <span className="inline-block mt-1 text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded border border-red-200">
+                                  Out of Stock
+                                </span>
+                              )}
                             </div>
                             <button
                               onClick={() => removeFromCart(item.product.id)}
@@ -191,11 +196,23 @@ export default function CartPage() {
                       </p>
                     </div>
 
-                    <Link href="/checkout">
-                      <Button className="w-full bg-primary hover:bg-primary/90 py-6 text-base">
-                        Proceed to Checkout
+                    {items.some(item => typeof (item.product as any).stock === 'number' && (item.product as any).stock <= 0) && (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-xs font-medium">
+                        One or more items in your cart are currently out of stock. Please remove them to proceed.
+                      </div>
+                    )}
+
+                    {items.some(item => typeof (item.product as any).stock === 'number' && (item.product as any).stock <= 0) ? (
+                      <Button disabled className="w-full bg-muted text-muted-foreground py-6 text-base cursor-not-allowed">
+                        Cannot Proceed (Item Out of Stock)
                       </Button>
-                    </Link>
+                    ) : (
+                      <Link href="/checkout">
+                        <Button className="w-full bg-primary hover:bg-primary/90 py-6 text-base">
+                          Proceed to Checkout
+                        </Button>
+                      </Link>
+                    )}
 
                     {/* Promo Code */}
                     <div className="mt-6 pt-6 border-t border-border">

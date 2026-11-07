@@ -933,6 +933,13 @@ export default function CheckoutPage() {
       return
     }
 
+    const outOfStockLine = snapshotItems.find(it => typeof (it.product as any).stock === 'number' && (it.product as any).stock <= 0)
+    if (outOfStockLine) {
+      toast.error(`"${outOfStockLine.product.name}" is out of stock. Please remove it from your cart.`)
+      if (retryManagerRef.current.endOperation(op)) setIsPlacingOrder(false)
+      return
+    }
+
     // Build BOTH purchasedLines and orderItems from the same accepted snapshot
     const purchasedLines = snapshotItems.map((i) => ({ productId: i.product.id, quantity: i.quantity }))
 

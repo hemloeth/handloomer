@@ -11,6 +11,9 @@ import { resolveMediaUrl } from "@/lib/media"
 import { getOpenGraphImageUrl } from "@/lib/cloudinary-utils"
 import type { Metadata } from "next"
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface Props {
   params: Promise<{ slug: string }>
 }

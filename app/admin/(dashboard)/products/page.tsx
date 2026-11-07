@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -20,7 +20,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, AlertTriangle, Trash2, X, CheckSquare, Square, ListChecks, Eye } from "lucide-react"
+import { MoreHorizontal, Search, AlertTriangle, Trash2, X, CheckSquare, Square, ListChecks, Eye, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/context/product-context"
 import { AdminToast, ToastItem } from "@/components/admin/admin-toast"
@@ -30,12 +30,28 @@ import { QuickSaleModal } from "@/components/admin/quick-sale-modal"
 let toastId = 0
 
 export default function AdminProductsPage() {
-  const { products, deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
+  const { products, refreshProducts, deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshProducts?.()
+      showToast("Refreshed", "Product catalog and stock up to date", "success")
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Refetch live stock on mount
+  useEffect(() => {
+    refreshProducts?.()
+  }, [refreshProducts])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [updatingField, setUpdatingField] = useState<string | null>(null)
   const [activeSaleProduct, setActiveSaleProduct] = useState<any | null>(null)
@@ -246,6 +262,18 @@ export default function AdminProductsPage() {
             </span>
           </button>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground self-end sm:self-auto"
+          title="Refresh live stock"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          <span>Refresh Stock</span>
+        </Button>
       </div>
 
       {/* Toolbar: Search and Multiple Actions */}

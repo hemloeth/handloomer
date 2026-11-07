@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
 import { usePathname } from 'next/navigation'
 import {
     type Product as FrontendProduct,
@@ -61,6 +61,7 @@ interface Product {
 
 interface ProductContextType {
     products: Product[]
+    refreshProducts: () => Promise<void>
     addProduct: (formData: FormData) => Promise<Product | null>
     updateProduct: (id: string, formData: FormData) => Promise<Product | null>
     quickUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>
@@ -90,37 +91,55 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined)
 
 export function ProductProvider({ children, initialProducts = [] }: { children: ReactNode, initialProducts?: FrontendProduct[] }) {
     const [products, setProducts] = useState<Product[]>([])
-    const [ssrProducts] = useState<FrontendProduct[]>(initialProducts)
+    const [ssrProducts, setSsrProducts] = useState<FrontendProduct[]>(initialProducts)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const pathname = usePathname()
     const isAdminArea = pathname?.startsWith("/admin") ?? false
 
-    // Data strategy (standard):
-    //  - Public pages already have the FULL catalog from the server (initialProducts),
-    //    fetched once in the root layout with ISR. We do NOT re-fetch or overwrite it,
-    //    so filtering/search/section rendering always see every product (no 20-item cap)
-    //    and there is no refetch on every navigation.
-    //  - The admin panel needs the raw DB shape with live freshness (CRUD), so it fetches once.
-    //  - Fallback: if the server catalog came back empty (e.g. SSR hiccup), fetch client-side
-    //    once so the storefront is never blank.
-    useEffect(() => {
-        if (!isAdminArea && ssrProducts.length > 0) return
+    const fetchProducts = useCallback(async () => {
+        try {
+            const data = await apiGet('/api/product/allproducts?limit=100&fullData=true', { cache: 'no-store' })
+            if (data?.products) {
+                setProducts(data.products)
+            }
+        } catch (err) {
+            console.error("Failed to fetch products", err)
+            setError(err instanceof Error ? err.message : "Failed to fetch products")
+        }
+    }, [])
 
-        const fetchProducts = async () => {
-            try {
-                // limit=0 disables pagination on the backend -> complete catalog
-                const data = await apiGet('/api/product/allproducts?limit=100&fullData=true')
-                if (data.products) {
-                    setProducts(data.products)
-                }
-            } catch (err) {
-                console.error("Failed to fetch products", err)
-                setError(err instanceof Error ? err.message : "Failed to fetch products")
+    // Real-time synchronization:
+    // 1. Initial background fetch to get fresh live stock numbers from DB.
+    // 2. Window focus & tab visibility listeners so returning to tab updates stock instantly.
+    // 3. Periodic polling in admin panel (every 20s) so new orders reflect immediately.
+    useEffect(() => {
+        fetchProducts()
+
+        const handleFocus = () => {
+            fetchProducts()
+        }
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                fetchProducts()
             }
         }
-        fetchProducts()
-    }, [isAdminArea, ssrProducts.length])
+
+        window.addEventListener("focus", handleFocus)
+        document.addEventListener("visibilitychange", handleVisibilityChange)
+
+        let intervalId: NodeJS.Timeout | null = null
+        if (isAdminArea) {
+            intervalId = setInterval(fetchProducts, 20000)
+        }
+
+        return () => {
+            window.removeEventListener("focus", handleFocus)
+            document.removeEventListener("visibilitychange", handleVisibilityChange)
+            if (intervalId) clearInterval(intervalId)
+        }
+    }, [isAdminArea, fetchProducts])
 
     const addProduct = async (formData: FormData): Promise<Product | null> => {
         setLoading(true)
@@ -237,6 +256,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
 
         return products.map(dbProduct => {
             const isVideoStr = typeof dbProduct.videoFile === "string" || typeof dbProduct.videoUrl === "string";
+            const liveStock = typeof dbProduct.stock === 'number' ? dbProduct.stock : (dbProduct.stock ? Number(dbProduct.stock) : 0);
             return {
                 id: dbProduct._id.toString(),
                 sku: dbProduct.sku,
@@ -272,6 +292,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
                 dispatch: dbProduct.dispatch,
                 disclaimer: dbProduct.disclaimer,
                 internationalNote: dbProduct.internationalNote,
+                stock: liveStock,
                 productCollection: dbProduct.productCollection || 
                                  (dbProduct.isFestive ? "festive" : 
                                   dbProduct.isOnSale ? "big-sale" : "none")
@@ -283,6 +304,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         <ProductContext.Provider
             value={{
                 products,
+                refreshProducts: fetchProducts,
                 addProduct,
                 updateProduct,
                 quickUpdateProduct,

@@ -72,6 +72,7 @@ function mapServerCartItem(serverItem: any): CartItem | null {
       dispatch: p.dispatch,
       disclaimer: p.disclaimer,
       internationalNote: p.internationalNote,
+      stock: typeof p.stock === 'number' ? p.stock : (p.stock ? Number(p.stock) : 0),
     } as Product,
     quantity: serverItem.quantity || 1,
   }
@@ -418,7 +419,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // ======= Cart Operations =======
 
   const addToCart = useCallback((product: Product, quantity = 1) => {
-    const maxQty = typeof (product as any).stock === 'number' ? Math.min(10, (product as any).stock) : 10;
+    const rawStock = (product as any).stock;
+    if (typeof rawStock === 'number' && rawStock <= 0) {
+      toast.error("Sorry, this item is currently out of stock.");
+      return;
+    }
+    const maxQty = typeof rawStock === 'number' && rawStock > 0 ? Math.min(10, rawStock) : 10;
     bumpRev()
     setItems(currentItems => {
       const existingItem = currentItems.find(item => item.product.id === product.id)

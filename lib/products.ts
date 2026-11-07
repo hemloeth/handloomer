@@ -105,7 +105,7 @@ function mapProductFromDB(dbProduct: any): Product {
 export async function fetchProductsFromDB(limit: number = 100): Promise<Product[]> {
   try {
     const { apiServerGet } = await import("@/lib/api");
-    const data = await apiServerGet(`/api/product/allproducts?limit=${limit}`, { revalidate: 60 });
+    const data = await apiServerGet(`/api/product/allproducts?limit=${limit}`, { cache: 'no-store', revalidate: 0 });
 
     if (data.success && data.products) {
       return data.products.map(mapProductFromDB);
@@ -121,7 +121,7 @@ export async function fetchProductsFromDB(limit: number = 100): Promise<Product[
 export async function fetchProductBySku(sku: string): Promise<Product | null> {
   try {
     const { apiServerGet } = await import("@/lib/api");
-    const data = await apiServerGet(`/api/product/by-sku/${sku}`, { revalidate: 60 });
+    const data = await apiServerGet(`/api/product/by-sku/${sku}`, { cache: 'no-store', revalidate: 0 });
 
     if (data.success && data.product) {
       return mapProductFromDB(data.product);
@@ -159,7 +159,7 @@ export async function fetchPaginatedProducts(queryParams: Record<string, any> = 
     const query = new URLSearchParams(cleanParams).toString();
     const url = `/api/product/allproducts${query ? `?${query}&fullData=true` : '?fullData=true'}`;
     
-    const data = await apiServerGet(url, { revalidate: 60 });
+    const data = await apiServerGet(url, { cache: 'no-store', revalidate: 0 });
 
     if (data.success && data.products) {
       return {
