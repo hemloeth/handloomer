@@ -23,6 +23,7 @@ import {
 import { MoreHorizontal, Search, AlertTriangle, Trash2, X, CheckSquare, Square, ListChecks, Eye, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/context/product-context"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 import { AdminToast, ToastItem } from "@/components/admin/admin-toast"
 import { ConfirmModal } from "@/components/admin/confirm-modal"
 import { QuickSaleModal } from "@/components/admin/quick-sale-modal"
@@ -34,10 +35,11 @@ export default function AdminProductsPage() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [page, setPage] = useState(1)
-  const [pageProducts, setPageProducts] = useState<any[]>([])
+  type ProductsCache = { products: any[]; totalProducts: number; totalPages: number }
+  const [pageProducts, setPageProducts] = useState<any[]>(() => getAdminCache<ProductsCache>("admin:products:first")?.products ?? [])
   const [totalProducts, setTotalProducts] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-  const [isLoadingPage, setIsLoadingPage] = useState(true)
+  const [isLoadingPage, setIsLoadingPage] = useState(() => !hasAdminCache("admin:products:first"))
   const [activeTab, setActiveTab] = useState<'all' | 'sale'>('all')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
@@ -77,6 +79,9 @@ export default function AdminProductsPage() {
           setPageProducts(data.products)
           setTotalProducts(data.pagination?.totalProducts ?? data.products.length)
           setTotalPages(data.pagination?.totalPages ?? 1)
+          if (page === 1 && !searchTerm.trim() && activeTab === "all") {
+            setAdminCache("admin:products:first", { products: data.products, totalProducts: data.pagination?.totalProducts ?? data.products.length, totalPages: data.pagination?.totalPages ?? 1 })
+          }
         }
       } catch (err: any) {
         if (cancelled) return

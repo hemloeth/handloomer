@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { apiGet, apiPost, apiPut, getAdminToken, subscribeAdminSession } from "@/lib/api"
+import { getAdminCache, setAdminCache } from "@/lib/admin-page-cache"
 import { toast } from "sonner"
 
 export interface AdminOrder {
@@ -72,16 +73,19 @@ export function useAdminOrders(options: UseAdminOrdersOptions = {}) {
     autoFetch = true,
   } = options
 
-  const [orders, setOrders] = useState<AdminOrder[]>([])
-  const [loading, setLoading] = useState(autoFetch)
+  type OrdersCache = { orders: AdminOrder[]; totalPages: number; totalCount: number; displayed: { status: string; search: string; page: number } }
+  const ORDERS_CACHE_KEY = "admin:orders:default"
+  const [cachedOrders] = useState(() => getAdminCache<OrdersCache>(ORDERS_CACHE_KEY))
+  const [orders, setOrders] = useState<AdminOrder[]>(cachedOrders?.orders ?? [])
+  const [loading, setLoading] = useState(autoFetch && !cachedOrders)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [fetchErrorStatus, setFetchErrorStatus] = useState<number | null>(null)
-  const [displayedQuery, setDisplayedQuery] = useState<{ status: string; search: string; page: number } | null>(null)
+  const [displayedQuery, setDisplayedQuery] = useState<{ status: string; search: string; page: number } | null>(cachedOrders?.displayed ?? null)
   const [searchTerm, setSearchTerm] = useState(initialSearch)
   const [statusFilter, setStatusFilter] = useState(initialStatus)
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(cachedOrders?.totalPages ?? 1)
+  const [totalCount, setTotalCount] = useState(cachedOrders?.totalCount ?? 0)
 
   // Dedicated monotonic sequence ref for list search/filter/pagination ordering
   const requestSeqRef = useRef(0)
@@ -214,11 +218,16 @@ export function useAdminOrders(options: UseAdminOrdersOptions = {}) {
       }
 
       setOrders(data.orders)
-      setDisplayedQuery({ status: status || "", search: search.trim(), page: targetPage })
+      const displayed = { status: status || "", search: search.trim(), page: targetPage }
+      setDisplayedQuery(displayed)
       if (data.pagination) {
         setCurrentPage(data.pagination.page || targetPage)
         setTotalPages(data.pagination.totalPages || 1)
         setTotalCount(data.pagination.totalCount ?? data.orders.length)
+        // Cache default list (page 1, no filter) so tab return is instant.
+        if (targetPage === 1 && !search.trim() && (!status || status === "all")) {
+          setAdminCache(ORDERS_CACHE_KEY, { orders: data.orders, totalPages: data.pagination.totalPages || 1, totalCount: data.pagination.totalCount ?? data.orders.length, displayed })
+        }
       }
       setFetchError(null)
       setFetchErrorStatus(null)

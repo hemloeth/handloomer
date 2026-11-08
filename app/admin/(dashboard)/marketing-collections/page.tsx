@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { apiGet, apiUpload } from "@/lib/api"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 import { toast } from "sonner"
 import Image from "next/image"
 import { resolveMediaUrl } from "@/lib/media"
@@ -64,9 +65,9 @@ function MarketingCollectionsContent() {
     const router = useRouter()
     const tabParam = searchParams.get("tab")
 
-    const [collections, setCollections] = useState<CollectionItem[]>([])
+    const [collections, setCollections] = useState<CollectionItem[]>(() => getAdminCache<CollectionItem[]>("admin:marketing") ?? [])
     const [isLoading, setIsLoading] = useState(false)
-    const [isFetching, setIsFetching] = useState(true)
+    const [isFetching, setIsFetching] = useState(() => !hasAdminCache("admin:marketing"))
     const [activeTab, setActiveTab] = useState<string>("")
 
     const fetchCollections = async () => {
@@ -82,6 +83,7 @@ function MarketingCollectionsContent() {
                 })
 
                 setCollections(sorted)
+                setAdminCache("admin:marketing", sorted)
 
                 // Pick active tab: from URL if present, or activeTab if already set and valid, or first collection
                 if (tabParam && sorted.some(c => c.key === tabParam)) {
@@ -148,7 +150,7 @@ function MarketingCollectionsContent() {
         }
     }
 
-    if (isFetching) {
+    if (isFetching && collections.length === 0) {
         return (
             <div className="flex h-[400px] flex-col items-center justify-center gap-3">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

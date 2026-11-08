@@ -8,6 +8,7 @@ import { AdminToast, ToastItem } from "@/components/admin/admin-toast"
 import Image from "next/image"
 import imageCompression from "browser-image-compression"
 import { apiGet, apiDelete, apiUpload } from "@/lib/api"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 import { resolveMediaUrl } from "@/lib/media"
 
 interface HeroSlide {
@@ -32,8 +33,8 @@ const LAYOUT_OPTIONS = [
 ]
 
 export default function HeroAdminPage() {
-    const [slides, setSlides] = useState<HeroSlide[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const [slides, setSlides] = useState<HeroSlide[]>(() => getAdminCache<HeroSlide[]>("admin:hero") ?? [])
+    const [isLoading, setIsLoading] = useState(() => !hasAdminCache("admin:hero"))
     const [isSaving, setIsSaving] = useState(false)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingSlide, setEditingSlide] = useState<HeroSlide | null>(null)
@@ -60,10 +61,12 @@ export default function HeroAdminPage() {
     }, [])
 
     const fetchSlides = async () => {
+        setIsLoading(true)
         try {
             const data = await apiGet('/api/hero')
             if (data.success && data.slides) {
                 setSlides(data.slides)
+                setAdminCache("admin:hero", data.slides)
             }
         } catch (error) {
             console.error("Error fetching hero slides:", error)
@@ -200,7 +203,7 @@ export default function HeroAdminPage() {
         }
     }
 
-    if (isLoading) {
+    if (isLoading && slides.length === 0) {
         return (
             <div className="flex h-[80vh] items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />

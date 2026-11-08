@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Edit2, Layout, Image as ImageIcon } from "lucide-react"
 import { categories } from "@/lib/products"
 import { apiGet, API_BASE_URL } from "@/lib/api"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 import { resolveMediaUrl } from "@/lib/media"
 
 // Add special collections to the list
@@ -28,15 +29,17 @@ const allCollections = [
 
 export default function CategoryBannersPage() {
     const router = useRouter()
-    const [banners, setBanners] = useState<any[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+    const [banners, setBanners] = useState<any[]>(() => getAdminCache<any[]>("admin:category-banners") ?? [])
+    const [isLoading, setIsLoading] = useState(() => !hasAdminCache("admin:category-banners"))
 
     useEffect(() => {
         const fetchBanners = async () => {
+            setIsLoading(true)
             try {
                 const response = await apiGet('/api/category-banner/all')
                 if (response.success) {
                     setBanners(response.data)
+                    setAdminCache("admin:category-banners", response.data)
                 }
             } catch (error) {
                 console.error("Error fetching category banners:", error)

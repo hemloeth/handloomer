@@ -34,12 +34,19 @@ interface RecentOrder {
     items: any[]
 }
 
+import { getAdminCache, setAdminCache } from "@/lib/admin-page-cache"
+
+type DashboardCache = { stats: DashboardStats; revenue: any[]; sales: any[]; orders: RecentOrder[] }
+const DASHBOARD_KEY = "admin:dashboard"
+
 export default function AdminDashboard() {
-    const [stats, setStats] = useState<DashboardStats | null>(null)
-    const [revenueData, setRevenueData] = useState<any[]>([])
-    const [salesData, setSalesData] = useState<any[]>([])
-    const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
-    const [loading, setLoading] = useState(true)
+    const [cached] = useState(() => getAdminCache<DashboardCache>(DASHBOARD_KEY))
+    const [stats, setStats] = useState<DashboardStats | null>(cached?.stats ?? null)
+    const [revenueData, setRevenueData] = useState<any[]>(cached?.revenue ?? [])
+    const [salesData, setSalesData] = useState<any[]>(cached?.sales ?? [])
+    const [recentOrders, setRecentOrders] = useState<RecentOrder[]>(cached?.orders ?? [])
+    // Cached return shows instantly; loader only on first-ever load.
+    const [loading, setLoading] = useState(!cached)
     const [error, setError] = useState<string | null>(null)
     const [refreshFailed, setRefreshFailed] = useState(false)
 
@@ -48,6 +55,7 @@ export default function AdminDashboard() {
     }, [])
 
     const fetchDashboardData = async () => {
+        setLoading(true)
         try {
             const { apiGet } = await import("@/lib/api")
             const [statsRes, revenueRes, salesRes, ordersRes] = await Promise.all([
@@ -63,6 +71,12 @@ export default function AdminDashboard() {
             if (revenueRes.success) setRevenueData(revenueRes.chartData)
             if (salesRes.success) setSalesData(salesRes.chartData)
             if (ordersRes.success) setRecentOrders(ordersRes.orders)
+            setAdminCache(DASHBOARD_KEY, {
+                stats: statsRes.stats,
+                revenue: revenueRes.success ? revenueRes.chartData : [],
+                sales: salesRes.success ? salesRes.chartData : [],
+                orders: ordersRes.success ? ordersRes.orders : [],
+            })
         } catch (err: any) {
             const msg = err?.message || "Failed to load dashboard"
             if (stats === null) setError(msg)
@@ -91,7 +105,7 @@ export default function AdminDashboard() {
     const formatStatus = (s: string) =>
         s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())
 
-    if (loading) {
+    if (loading && !stats) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -112,7 +126,10 @@ export default function AdminDashboard() {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight text-primary font-serif">Dashboard</h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-3xl font-bold tracking-tight text-primary font-serif">Dashboard</h2>
+                    {loading && stats && <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded"><Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> Updating…</span>}
+                </div>
                 {refreshFailed && <p className="text-xs text-amber-600 mt-1">Refresh failed — showing last known values.</p>}
                 <p className="text-muted-foreground">
                     Overview of your store&apos;s performance.

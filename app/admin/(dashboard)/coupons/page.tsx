@@ -13,6 +13,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -33,8 +34,8 @@ interface Coupon {
 }
 
 export default function CouponsPage() {
-    const [coupons, setCoupons] = useState<Coupon[]>([])
-    const [loading, setLoading] = useState(true)
+    const [coupons, setCoupons] = useState<Coupon[]>(() => getAdminCache<Coupon[]>("admin:coupons") ?? [])
+    const [loading, setLoading] = useState(() => !hasAdminCache("admin:coupons"))
     const [submitting, setSubmitting] = useState(false)
 
     const [code, setCode] = useState("")
@@ -50,9 +51,11 @@ export default function CouponsPage() {
     }, [])
 
     const fetchCoupons = async () => {
+        setLoading(true)
         try {
             const res = await apiGet("/api/coupon")
             setCoupons(res.coupons || [])
+            setAdminCache("admin:coupons", res.coupons || [])
         } catch (error) {
             console.error("Failed to load coupons", error)
             toast.error("Failed to load coupons")
@@ -103,7 +106,9 @@ export default function CouponsPage() {
     const toggleActive = async (id: string, currentStatus: boolean) => {
         try {
             await apiPut(`/api/coupon/${id}`, { isActive: !currentStatus })
-            setCoupons(coupons.map(c => c._id === id ? { ...c, isActive: !currentStatus } : c))
+            const next = coupons.map(c => c._id === id ? { ...c, isActive: !currentStatus } : c)
+            setCoupons(next)
+            setAdminCache("admin:coupons", next)
             toast.success(`Coupon marked as ${!currentStatus ? 'Active' : 'Inactive'}`)
         } catch (error) {
             toast.error("Failed to update status")
@@ -114,14 +119,16 @@ export default function CouponsPage() {
         if (!confirm("Are you sure you want to delete this coupon?")) return
         try {
             await apiDelete(`/api/coupon/${id}`)
-            setCoupons(coupons.filter(c => c._id !== id))
+            const next = coupons.filter(c => c._id !== id)
+            setCoupons(next)
+            setAdminCache("admin:coupons", next)
             toast.success("Coupon deleted")
         } catch (error) {
             toast.error("Failed to delete coupon")
         }
     }
 
-    if (loading) {
+    if (loading && coupons.length === 0) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

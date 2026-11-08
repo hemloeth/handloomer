@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
 
 type Customer = {
     _id: string
@@ -27,9 +28,9 @@ type CustomerSummary = {
 }
 
 export default function CustomersPage() {
-    const [customers, setCustomers] = useState<Customer[]>([])
-    const [summary, setSummary] = useState<CustomerSummary>({ total: 0, active: 0, vip: 0, totalRevenue: 0 })
-    const [loading, setLoading] = useState(true)
+    const [customers, setCustomers] = useState<Customer[]>(() => getAdminCache<Customer[]>("admin:customers:default") ?? [])
+    const [summary, setSummary] = useState<CustomerSummary>(() => getAdminCache<CustomerSummary>("admin:customers:summary") ?? { total: 0, active: 0, vip: 0, totalRevenue: 0 })
+    const [loading, setLoading] = useState(() => !hasAdminCache("admin:customers:default"))
     const [searchTerm, setSearchTerm] = useState("")
     const [debouncedSearch, setDebouncedSearch] = useState("")
     const [page, setPage] = useState(1)
@@ -46,6 +47,7 @@ export default function CustomersPage() {
     useEffect(() => {
         let cancelled = false
         const fetchCustomers = async () => {
+            // Silent background refresh when data already visible.
             setLoading(true)
             try {
                 const { apiGet } = await import("@/lib/api")
@@ -56,6 +58,10 @@ export default function CustomersPage() {
                     setCustomers(data.customers)
                     setSummary(data.summary)
                     setTotalPages(data.pagination.totalPages)
+                    if (page === 1 && !debouncedSearch) {
+                        setAdminCache("admin:customers:default", data.customers)
+                        setAdminCache("admin:customers:summary", data.summary)
+                    }
                 }
             } catch (err) {
                 if (!cancelled) console.error("Failed to fetch customers:", err)
@@ -67,7 +73,8 @@ export default function CustomersPage() {
         return () => { cancelled = true }
     }, [page, debouncedSearch])
 
-    if (loading) {
+    // Full loader only on first load (no cached/visible data).
+    if (loading && customers.length === 0) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
