@@ -13,7 +13,8 @@ import {
   XCircle,
   HelpCircle,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  CreditCard
 } from 'lucide-react'
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -31,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { resolveCustomerOrderStatus } from "@/lib/order-status"
 
 interface OrderItem {
   name: string
@@ -59,7 +61,19 @@ interface Order {
   payment?: {
     method: string
     status: string
+    verificationPending?: boolean
   }
+  fulfillmentHold?: {
+    active?: boolean
+    reason?: string | null
+  }
+  reservation?: {
+    state?: string
+    expiresAt?: string | Date
+  }
+  resourcesReleased?: boolean
+  canResumePayment?: boolean
+  cannotResumeReason?: string | null
   canCancel?: boolean
   cannotCancelReason?: string | null
   cancellationSummary?: {
@@ -112,6 +126,7 @@ export default function OrdersPage() {
   const [selectedReason, setSelectedReason] = useState(CANCELLATION_REASONS[0])
   const [optionalDetails, setOptionalDetails] = useState("")
   const [cancellingIds, setCancellingIds] = useState<Record<string, boolean>>({})
+  const [resumingIds, setResumingIds] = useState<Record<string, boolean>>({})
   const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
   const [cancelErrors, setCancelErrors] = useState<Record<string, string | null>>({})
 
@@ -283,50 +298,138 @@ export default function OrdersPage() {
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return <CheckCircle className="w-5 h-5 text-green-600" />
-      case 'shipped':
-      case 'in_transit':
-      case 'out_for_delivery':
+  const handleResumePayment = async (order: Order) => {
+    if (resumingIds[order._id]) return
+    setResumingIds(prev => ({ ...prev, [order._id]: true }))
+
+    try {
+      const { apiPost } = await import("@/lib/api")
+      const { openRazorpayModal } = await import("@/lib/razorpay-modal")
+      const { PreparingRetryManager } = await import("@/lib/preparing-retry")
+
+      // 1. Authoritative status check against backend
+      const checkData = await apiPost('/api/order/verify-payment', {
+        orderId: order.orderId,
+      })
+
+      if (checkData?.outcome === "paid" || checkData?.status === "paid") {
+        toast.success("Payment confirmed! Your order has been placed successfully.")
+        await refreshSingleOrder(order._id)
+        return
+      }
+
+      if (checkData?.outcome === "terminal") {
+        toast.error(checkData?.message || "Payment window for this order has expired.")
+        await refreshSingleOrder(order._id)
+        return
+      }
+
+      if (checkData?.outcome === "held") {
+        toast.info(checkData?.message || "This order is under review.")
+        await refreshSingleOrder(order._id)
+        return
+      }
+
+      if (checkData?.outcome === "payable") {
+        const retryManager = new PreparingRetryManager()
+        const op = retryManager.startOperation("orders-page", order.orderId)
+        if (!op) return
+
+        await openRazorpayModal({
+          scope: "orders-page",
+          retryManager,
+          parentOp: op,
+          orderId: order.orderId,
+          razorpayOrderId: checkData.razorpayOrderId,
+          amount: checkData.amount,
+          currency: checkData.currency || "INR",
+          key: checkData.key,
+          prefill: {
+            name: user?.name,
+            email: user?.email,
+          },
+          onVerify: async (response, verifyOp) => {
+            try {
+              const verifyRes = await apiPost('/api/order/verify-payment', {
+                orderId: order.orderId,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              })
+              if (verifyRes?.status === "paid" || verifyRes?.outcome === "paid") {
+                toast.success("Payment Successful! Your order has been confirmed.")
+                await refreshSingleOrder(order._id)
+              } else if (verifyRes?.outcome === "held") {
+                toast.info(verifyRes.message || "Payment received and is undergoing quick verification.")
+                await refreshSingleOrder(order._id)
+              } else {
+                toast.info("Payment received, awaiting confirmation.")
+                await refreshSingleOrder(order._id)
+              }
+            } catch (vErr: any) {
+              toast.error(vErr?.message || "Payment confirmation error. Checking status...")
+              await refreshSingleOrder(order._id)
+            }
+          },
+          onDismiss: async () => {
+            // Recheck status in case external UPI app completed
+            try {
+              const postDismiss = await apiPost('/api/order/verify-payment', { orderId: order.orderId })
+              if (postDismiss?.outcome === "paid" || postDismiss?.status === "paid") {
+                toast.success("Payment confirmed! Your order is placed.")
+                await refreshSingleOrder(order._id)
+                return
+              }
+            } catch {}
+
+            toast.error("Payment Not Completed: You closed the payment window before completing the transaction. Tap 'Resume Payment' to complete your order.", {
+              duration: 7000,
+            })
+            await refreshSingleOrder(order._id)
+          },
+          onFailure: (failRes) => {
+            toast.error(failRes?.error?.description || "Payment did not complete. You can retry with another method.", {
+              duration: 6000,
+            })
+            refreshSingleOrder(order._id)
+          },
+          onErrorState: (errMsg) => {
+            toast.error(errMsg)
+          },
+        })
+      } else {
+        toast.info(checkData?.message || "Order payment status pending.")
+        await refreshSingleOrder(order._id)
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Could not resume payment. Please try again.")
+    } finally {
+      if (isMountedRef.current) {
+        setResumingIds(prev => ({ ...prev, [order._id]: false }))
+      }
+    }
+  }
+
+  const renderStatusIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'check-circle':
+        return <CheckCircle className="w-5 h-5 text-emerald-600" />
+      case 'truck':
         return <Truck className="w-5 h-5 text-blue-600" />
-      case 'placed':
-      case 'confirmed':
-      case 'processing':
-        return <Clock className="w-5 h-5 text-yellow-600" />
-      case 'cancelled':
+      case 'clock':
+        return <Clock className="w-5 h-5 text-amber-600" />
+      case 'x-circle':
         return <XCircle className="w-5 h-5 text-red-600" />
-      case 'returned':
+      case 'rotate-ccw':
         return <RotateCcw className="w-5 h-5 text-orange-600" />
+      case 'alert-triangle':
+        return <AlertTriangle className="w-5 h-5 text-red-600" />
+      case 'refresh-cw':
+        return <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
       default:
         return <Package className="w-5 h-5 text-muted-foreground" />
     }
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-green-100 text-green-800'
-      case 'shipped':
-      case 'in_transit':
-      case 'out_for_delivery':
-        return 'bg-blue-100 text-blue-800'
-      case 'placed':
-      case 'confirmed':
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'cancelled':
-        return 'bg-red-100 text-red-800'
-      case 'returned':
-        return 'bg-orange-100 text-orange-800'
-      default:
-        return 'bg-muted text-muted-foreground'
-    }
-  }
-
-  const formatStatus = (status: string) =>
-    status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 
   const getPaymentMethodDisplay = (method?: string) => {
     if (!method) return "Online Payment"
@@ -447,15 +550,13 @@ export default function OrdersPage() {
         <div className="space-y-6">
           {filteredOrders.map((order) => {
             const isCancelling = !!cancellingIds[order._id]
+            const isResuming = !!resumingIds[order._id]
             const isRefreshing = !!refreshingIds[order._id]
             const orderError = cancelErrors[order._id]
 
-            // Authoritative eligibility flags provided by backend
-            const canCancelOrder = order.canCancel ?? (
-              ["placed", "confirmed", "processing"].includes(order.status) &&
-              order.cancellationSummary?.status !== "requested" &&
-              order.cancellationSummary?.status !== "completed"
-            )
+            // Authoritative status and eligibility resolved by order-status service
+            const orderStatus = resolveCustomerOrderStatus(order)
+            const canCancelOrder = orderStatus.canCancel
 
             const isCancellationRequested = order.cancellationSummary?.status === "requested"
             const isCourierUncertain = isCancellationRequested && order.cancellationSummary?.courierOutcome === "uncertain"
@@ -467,9 +568,9 @@ export default function OrdersPage() {
                 <div className="bg-secondary/60 px-6 py-4 border-b border-border">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex items-center space-x-3">
-                      {getStatusIcon(order.status)}
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${getStatusColor(order.status)}`}>
-                        {formatStatus(order.status)}
+                      {renderStatusIcon(orderStatus.iconName)}
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${orderStatus.badgeColor}`}>
+                        {orderStatus.label}
                       </span>
                       <div className="flex flex-col">
                         <span className="text-sm text-foreground font-semibold">
@@ -492,8 +593,8 @@ export default function OrdersPage() {
                         })}
                       </span>
 
-                      {/* Quick refresh action for pending states */}
-                      {(isCancellationRequested || order.refundSummary?.status === "pending") && (
+                      {/* Quick refresh action for pending, reviewing, or uncertain states */}
+                      {(orderStatus.isPendingPayment || isCancellationRequested || order.refundSummary?.status === "pending" || orderStatus.key === "under_review") && (
                         <Button
                           variant="ghost"
                           size="xs"
@@ -511,6 +612,46 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Progress / Status Notices */}
+                {orderStatus.isPendingPayment && (
+                  <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span>
+                        <strong>{orderStatus.label}:</strong> {orderStatus.description}
+                      </span>
+                    </div>
+                    {orderStatus.canResumePayment && (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => handleResumePayment(order)}
+                        disabled={isResuming}
+                        className="text-xs font-semibold text-amber-800 dark:text-amber-200 hover:text-amber-950 underline underline-offset-2 p-0 h-auto"
+                      >
+                        {isResuming ? "Connecting..." : "Pay Now →"}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {orderStatus.key === "payment_expired" && (
+                  <div className="px-6 py-2.5 bg-stone-500/10 border-b border-stone-500/20 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-stone-500 flex-shrink-0" />
+                    <span>
+                      <strong>Payment Expired:</strong> {orderStatus.description}
+                    </span>
+                  </div>
+                )}
+
+                {orderStatus.key === "under_review" && (
+                  <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>
+                      <strong>Under Review:</strong> {orderStatus.description}
+                    </span>
+                  </div>
+                )}
+
                 {isCancellationRequested && (
                   <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -619,6 +760,28 @@ export default function OrdersPage() {
                         </span>
                       )}
 
+                      {/* Resume Payment Action for unpaid online orders */}
+                      {orderStatus.canResumePayment && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleResumePayment(order)}
+                          disabled={isResuming || isCancelling}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8 gap-1.5 shadow-sm"
+                        >
+                          {isResuming ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                              Connecting...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-3.5 h-3.5" />
+                              Resume Payment
+                            </>
+                          )}
+                        </Button>
+                      )}
+
                       {/* Cancel Order Action */}
                       {canCancelOrder && (
                         <Button
@@ -629,7 +792,7 @@ export default function OrdersPage() {
                             setSelectedReason(CANCELLATION_REASONS[0])
                             setOptionalDetails("")
                           }}
-                          disabled={isCancelling}
+                          disabled={isCancelling || isResuming}
                           className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
                         >
                           {isCancelling ? (
@@ -730,6 +893,10 @@ export default function OrdersPage() {
                 {orderToCancel.payment?.method === "cod" ? (
                   <p className="text-muted-foreground leading-relaxed">
                     This is a Cash on Delivery order. No payment was collected, so no monetary refund is required. Stock will be restored to store inventory.
+                  </p>
+                ) : orderToCancel.payment?.status !== "paid" ? (
+                  <p className="text-muted-foreground leading-relaxed">
+                    No payment was charged for this order. It will be cancelled immediately and reserved items will be released back to the store.
                   </p>
                 ) : (
                   <p className="text-muted-foreground leading-relaxed">

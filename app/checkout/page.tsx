@@ -566,9 +566,48 @@ export default function CheckoutPage() {
     }
   }
 
-  const handleStartNewCheckout = () => {
-    transitionToTerminal("Previous attempt reset. You can now adjust your cart or details and place a fresh order.")
+  const [isAbandoningOrder, setIsAbandoningOrder] = useState(false)
+
+  const handleCancelOrderAndReset = async () => {
+    const a = loadAttempt(scope)
+    const orderId = pendingOrder?.orderId || a?.orderId
+    const token = pendingOrder?.token || a?.checkoutToken || a?.recoverySecret
+
+    if (orderId) {
+      setIsAbandoningOrder(true)
+      try {
+        const res = await apiPost('/api/order/abandon-checkout', {
+          orderId,
+          checkoutToken: token,
+          reason: "Customer cancelled checkout to start fresh",
+        })
+        if (res?.success) {
+          toast.success(`Order #${orderId} cancelled and reserved items returned to store.`)
+        } else if (res?.code === "PAYMENT_CAPTURED") {
+          toast.info("A payment was detected for this order. Verification is in progress.")
+          await recheckPending()
+          return
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Could not cancel pending order with the store.")
+      } finally {
+        setIsAbandoningOrder(false)
+      }
+    }
+
+    transitionToTerminal("Previous checkout reset. You can now adjust your cart or details and place a fresh order.")
   }
+
+  const handleLeavePendingAndStartFresh = () => {
+    const a = loadAttempt(scope)
+    const orderId = pendingOrder?.orderId || a?.orderId
+    if (orderId) {
+      toast.info(`Note: Order #${orderId} will remain reserved until the ~15 minute payment window expires, after which it will automatically be released.`)
+    }
+    transitionToTerminal("Session reset. You can now start a fresh checkout.")
+  }
+
+  const handleStartNewCheckout = handleCancelOrderAndReset
 
   // One-shot reload recovery: settle an attempt whose outcome was interrupted.
   useEffect(() => {
@@ -744,6 +783,7 @@ export default function CheckoutPage() {
               orderId,
               checkoutToken: token,
             })
+            // Case B: Payment succeeded but modal closed (external UPI app / delayed callback)
             if (checkData?.status === "paid" || checkData?.outcome === "paid") {
               const op = retryManagerRef.current.startOperation(scope, orderId)
               if (op) {
@@ -756,15 +796,51 @@ export default function CheckoutPage() {
                 return
               }
             }
+            // Case C: Payment verification is uncertain / bank confirmation pending
+            if (checkData?.outcome === "verification_pending") {
+              clearCheckoutLoadingStates()
+              patchAttempt(scope, { phase: "awaiting_payment" })
+              showPending({
+                orderId,
+                token,
+                dbId: params.dbId,
+                purchasedLines: params.purchasedLines,
+                outcome: "verification_pending",
+                paymentStatus: "pending",
+                razorpayOrderId: params.razorpayOrderId,
+                amount: params.amount,
+                currency: params.currency,
+                key: params.key,
+              })
+              toast.info("Payment Confirmation Pending: We are confirming the transaction with your bank. If money was debited, it will confirm automatically.", {
+                duration: 7000,
+              })
+              return
+            }
           } catch {
             // Dismissed without payment or check errored
           }
         }
 
+        // Case A: Customer closed modal without paying
         clearCheckoutLoadingStates()
         patchAttempt(scope, { phase: "awaiting_payment" })
-        toast.error("Payment Cancelled: You closed the payment window before completing the transaction. Tap 'Resume Payment' to complete your order.", {
-          duration: 6000,
+        if (orderId) {
+          showPending({
+            orderId,
+            token,
+            dbId: params.dbId,
+            purchasedLines: params.purchasedLines,
+            outcome: "payable",
+            paymentStatus: "pending",
+            razorpayOrderId: params.razorpayOrderId,
+            amount: params.amount,
+            currency: params.currency,
+            key: params.key,
+          })
+        }
+        toast.error("Payment Not Completed: You closed the payment window before completing the transaction. Tap 'Resume Payment' to complete your order.", {
+          duration: 7000,
         })
       },
       onFailure: (response: any) => {
@@ -1147,6 +1223,25 @@ export default function CheckoutPage() {
   }
 
   if (orderPlaced) {
+    const isCod = (authoritativeOrder?.payment?.method || formData.paymentMethod) === "cod"
+    const isZeroPayable = authoritativeOrder?.pricing?.total === 0 || (!isCod && Number(authoritativeOrder?.pricing?.total ?? 0) === 0)
+    const successBadge = isCod
+      ? "Order Placed — Pay on Delivery"
+      : isZeroPayable
+      ? "Order Confirmed — No Payment Due"
+      : "Payment Successful"
+    const successHeading = isCod ? "Order Placed Successfully!" : "Congratulations!"
+    const successDescription = isCod
+      ? "Your Cash on Delivery order has been received and will be verified for dispatch. A confirmation email has been queued to"
+      : isZeroPayable
+      ? "Your order has been confirmed without any payment charge. A confirmation email has been queued to"
+      : "Your payment was confirmed and your order has been placed successfully. A confirmation email has been queued to"
+    const paymentMethodDisplay = isCod
+      ? "Cash on Delivery (Pending upon Delivery)"
+      : isZeroPayable
+      ? "Settled (Fully covered by coupon)"
+      : "Paid Online (Razorpay)"
+
     return (
       <main className="min-h-screen flex flex-col">
         <Header />
@@ -1158,10 +1253,10 @@ export default function CheckoutPage() {
             <div className="w-20 h-20 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
               <Check className="w-10 h-10 text-emerald-600" />
             </div>
-            <span className="text-xs font-bold tracking-widest uppercase text-primary/80 mb-1 inline-block">Payment Successful</span>
-            <h1 className="font-serif text-3xl font-bold mb-3">Congratulations!</h1>
+            <span className="text-xs font-bold tracking-widest uppercase text-primary/80 mb-1 inline-block">{successBadge}</span>
+            <h1 className="font-serif text-3xl font-bold mb-3">{successHeading}</h1>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-              Your order has been placed successfully. A confirmation email has been queued to{" "}
+              {successDescription}{" "}
               <span className="font-semibold text-foreground">
                 {authoritativeOrder?.shippingAddress?.email || formData.email || "your email"}
               </span>.
@@ -1174,7 +1269,7 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Payment Method</span>
                 <span className="font-medium">
-                  {(authoritativeOrder?.payment?.method || formData.paymentMethod) === "cod" ? "Cash on Delivery" : "Paid Online (Razorpay)"}
+                  {paymentMethodDisplay}
                 </span>
               </div>
               {authoritativeOrder?.pricing?.total !== undefined && (
@@ -1288,15 +1383,33 @@ export default function CheckoutPage() {
                   </Button>
                 </Link>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground text-xs mt-2"
-                onClick={handleStartNewCheckout}
-                disabled={isResumingPayment || isCheckingPending}
-              >
-                Cancel and Start Fresh Checkout
-              </Button>
+              <div className="pt-2 flex flex-col gap-2 w-full">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs w-full"
+                  onClick={handleCancelOrderAndReset}
+                  disabled={isResumingPayment || isCheckingPending || isAbandoningOrder}
+                >
+                  {isAbandoningOrder ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                      Cancelling Unpaid Order & Restoring Stock...
+                    </>
+                  ) : (
+                    "Cancel Unpaid Order & Reset"
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground text-xs w-full"
+                  onClick={handleLeavePendingAndStartFresh}
+                  disabled={isResumingPayment || isCheckingPending || isAbandoningOrder}
+                >
+                  Leave Pending & Start Fresh
+                </Button>
+              </div>
             </div>
           </div>
         </div>
