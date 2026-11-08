@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { useBlog } from "@/context/blog-context"
 import { Trash2 } from "lucide-react"
 import { resolveMediaUrl } from "@/lib/media"
+import { sanitizeBlogHtml } from "@/lib/sanitize-html"
 
 import { RichTextEditor } from "@/components/admin/rich-text-editor"
 
@@ -177,7 +178,7 @@ function BlogPageContent() {
                                 <CardContent className="p-4 pt-0 flex-1">
                                     <div 
                                         className="text-sm text-muted-foreground line-clamp-3 leading-relaxed prose prose-sm prose-p:my-0"
-                                        dangerouslySetInnerHTML={{ __html: blog.description }}
+                                        dangerouslySetInnerHTML={{ __html: sanitizeBlogHtml(blog.description) }}
                                     />
                                 </CardContent>
                                 <CardFooter className="p-4 border-t bg-muted/20 gap-2">

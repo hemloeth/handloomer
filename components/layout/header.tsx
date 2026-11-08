@@ -126,7 +126,10 @@ export function Header() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Track header height dynamically for other components to use
+  // Single owner of --header-offset. globals.css provides the deterministic
+  // first-paint value; this only refines it post-hydration for live changes
+  // (announcement close, resize, font swap) where measured === CSS initially,
+  // so refinement is a no-op and never causes a visible jump on load.
   useEffect(() => {
     const headerEl = document.getElementById('main-header')
     if (!headerEl) return
@@ -135,10 +138,7 @@ export function Header() {
       document.documentElement.style.setProperty('--header-offset', `${headerEl.offsetHeight}px`)
     }
 
-    // Initial set
-    updateHeight()
-
-    // Observe size changes (e.g. closing announcement bar or resizing window)
+    // Refine (no-op when CSS already correct)
     const observer = new ResizeObserver(updateHeight)
     observer.observe(headerEl)
 
@@ -411,9 +411,9 @@ export function Header() {
       <div
         className={cn(
           "lg:hidden fixed inset-x-0 bg-background border-b border-border transition-all duration-300 flex flex-col",
-          isMenuOpen ? "max-h-[calc(100dvh-var(--header-offset,120px))] h-[calc(100dvh-var(--header-offset,120px))] opacity-100" : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
+          isMenuOpen ? "max-h-[calc(100dvh-var(--header-offset))] h-[calc(100dvh-var(--header-offset))] opacity-100" : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
         )}
-        style={{ top: 'var(--header-offset, 120px)' }}
+        style={{ top: 'var(--header-offset)' }}
       >
         {/* Primary Navigation Area */}
         <div className="flex-1 overflow-y-auto pb-4">

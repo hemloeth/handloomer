@@ -276,10 +276,10 @@ function VideoCollectionContent() {
       <Header />
       <div
         className="min-h-screen bg-black"
-        style={{ paddingTop: 'var(--header-offset, 80px)' }}
+        style={{ paddingTop: 'var(--header-offset)' }}
       >
         {/* Full-Page Video Cover Hero */}
-        <section className="relative h-[calc(100vh-var(--header-offset,80px))] min-h-[540px] max-h-[960px] w-full overflow-hidden bg-black flex items-center justify-center">
+        <section className="relative h-[calc(100vh-var(--header-offset))] min-h-[540px] max-h-[960px] w-full overflow-hidden bg-black flex items-center justify-center">
           {heroVideos.map((video, index) => {
             const isActive = index === currentHeroVideo
             if (!isActive) return null

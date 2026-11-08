@@ -72,8 +72,8 @@ export default function CategoriesPage() {
             await deleteCategory(deleteTarget._id)
             setDeleteTarget(null)
             showToast("Category Deleted", `"${deletedName}" has been deleted successfully`)
-        } catch {
-            // error is handled in context
+        } catch (err: any) {
+            showToast("Delete failed", err?.message || "Could not delete category")
         } finally {
             setIsDeleting(false)
         }

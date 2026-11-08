@@ -10,6 +10,7 @@ import Image from "next/image"
 import { useParams } from "next/navigation"
 import { resolveMediaUrl } from "@/lib/media"
 import { API_BASE_URL } from "@/lib/api"
+import { sanitizeBlogHtml } from "@/lib/sanitize-html"
 
 export default function BlogPostPage() {
   const params = useParams()
@@ -196,7 +197,7 @@ export default function BlogPostPage() {
             {/* Article Body */}
             <div
               className="prose prose-lg max-w-none prose-headings:font-serif prose-headings:font-light prose-p:leading-relaxed prose-p:text-muted-foreground"
-              dangerouslySetInnerHTML={{ __html: post.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeBlogHtml(post.content) }}
             />
 
             {/* Tags */}

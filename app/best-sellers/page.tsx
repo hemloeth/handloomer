@@ -58,7 +58,7 @@ export default async function BestSellersPage({ searchParams }: BestSellersPageP
       <Header />
 
       {/* Hero Banner */}
-      <div className="mt-[96px] lg:mt-[104px]">
+      <div style={{ marginTop: "var(--header-offset)" }}>
         <PageHeroSlider
           slides={bestSellerSlides}
           height="40vh"

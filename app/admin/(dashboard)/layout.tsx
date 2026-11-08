@@ -12,6 +12,8 @@ import { apiGet, clearAdminToken } from "@/lib/api"
 import { Loader2, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 
+export const ADMIN_SESSION_VERIFIED_KEY = "handloomer_admin_session_verified"
+
 export default function AdminLayout({
     children,
 }: {
@@ -19,71 +21,48 @@ export default function AdminLayout({
 }) {
     const router = useRouter()
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+    // Dead manual-collapse model removed — sidebar uses hover/focus expansion only.
 
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem("handloomer_admin_sidebar_collapsed")
-            if (saved !== null) {
-                setIsSidebarCollapsed(saved === "true")
-            }
-        } catch (e) {}
-    }, [])
-
-    const toggleSidebarCollapse = () => {
-        setIsSidebarCollapsed(prev => {
-            const next = !prev
-            try {
-                localStorage.setItem("handloomer_admin_sidebar_collapsed", String(next))
-            } catch (e) {}
-            return next
-        })
-    }
-    const [isAuthorizing, setIsAuthorizing] = useState(true)
+    // Session guard below.
+    // One session manager: if already verified this lifecycle (flag set),
+    // stay on UI and verify silently; hard load shows minimal loader once.
+    // Backend verify-token remains authoritative — flag is UX only.
+    const [isAuthorizing, setIsAuthorizing] = useState(() => {
+        try { return sessionStorage.getItem(ADMIN_SESSION_VERIFIED_KEY) !== "true" } catch { return true }
+    })
     const [authError, setAuthError] = useState<string | null>(null)
 
     useEffect(() => {
         const verifyAdminSession = async () => {
             const userStr = localStorage.getItem("auth_user")
-
-            // 1. Check local credentials existence
             if (!userStr) {
-                console.log("[Admin Guard] Missing administrator account, redirecting to login.");
                 router.push("/admin")
                 return
             }
-
             try {
                 const user = JSON.parse(userStr)
                 if (user.role !== "admin") {
                     throw new Error("Account does not possess administrator privileges.")
                 }
-
-                // 2. Perform live token verification against the secure backend
                 const res = await apiGet<{ success: boolean; user: any }>("/api/admin-auth/verify-token")
-
                 if (res.success) {
+                    try { sessionStorage.setItem(ADMIN_SESSION_VERIFIED_KEY, "true") } catch {}
                     setIsAuthorizing(false)
                 } else {
                     throw new Error("Backend verification failed.")
                 }
             } catch (err: any) {
-                console.error("[Admin Guard Error]:", err)
-                
-                // Clear potentially compromised/expired storage
                 localStorage.removeItem("auth_user")
                 clearAdminToken()
-                
+                try { sessionStorage.removeItem(ADMIN_SESSION_VERIFIED_KEY) } catch {}
                 setAuthError(err.message || "Session expired. Please log in again.")
                 toast.error(err.message || "Administrative session expired. Please log in again.")
-                
                 setTimeout(() => {
                     router.push("/admin")
                 }, 2000)
             }
         }
-
-        verifyAdminSession()
+        void verifyAdminSession()
     }, [router])
 
     if (authError) {
@@ -102,29 +81,14 @@ export default function AdminLayout({
         )
     }
 
+    // Minimal professional loader (hard load only; silent verify otherwise).
     if (isAuthorizing) {
         return (
-            <div className="relative flex flex-col items-center justify-center min-h-screen bg-[#FDFBF7] text-center overflow-hidden">
-                {/* Visual Premium Accents */}
-                <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-[#E5DED6] opacity-30 blur-[100px]" />
-                <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-[#8B7355] opacity-10 blur-[120px]" />
-                
-                <div className="relative z-10 space-y-6">
-                    {/* Golden luxury loader ring */}
-                    <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
-                        <div className="absolute inset-0 rounded-full border-4 border-[#E5DED6]" />
-                        <div className="absolute inset-0 rounded-full border-4 border-t-[#8B7355] border-r-transparent border-b-transparent border-l-transparent animate-spin" />
-                        <ShieldAlert className="h-6 w-6 text-[#8B7355]/60 animate-pulse" />
-                    </div>
-                    
-                    <div className="space-y-1">
-                        <h2 className="text-lg font-serif font-semibold text-primary tracking-wide">
-                            Authorizing Session
-                        </h2>
-                        <p className="text-xs text-muted-foreground tracking-wider uppercase font-medium">
-                            Establishing Secure Encryption
-                        </p>
-                    </div>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background text-center">
+                <p className="text-sm font-serif text-primary mb-2">The Handloomer Admin</p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Verifying session…</span>
                 </div>
             </div>
         )
@@ -134,16 +98,14 @@ export default function AdminLayout({
         <CategoryProvider>
             <ProductProvider>
                 <BlogProvider>
-                    <div className="min-h-screen bg-muted/40 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" data-lenis-prevent data-admin-root="true">
+                    <div className="min-h-screen bg-muted/40" data-admin-root="true">
                         <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                        {/* Full-width top bar, fixed to the viewport top from left to right above the rail */}
                         <div className="fixed top-0 inset-x-0 z-50 h-16 bg-background shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
                             <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
                         </div>
-                        {/* Spacer keeping the fixed bar's 64px height reserved in flow so content starts below it */}
                         <div className="h-16 w-full pointer-events-none" aria-hidden="true" />
-                        {/* Content reserves ONLY the collapsed rail width (56px); the expanded panel overlays it */}
-                        <div className="flex flex-col min-w-0 lg:pl-14">
+                        {/* Content reserves exactly the 64px collapsed rail width */}
+                        <div className="flex flex-col min-w-0 lg:pl-16">
                             <main className="flex-1 px-3 py-4 md:px-4 w-full">
                                 <PageTransition>
                                     {children}

@@ -471,7 +471,7 @@ export default function OrdersPage() {
         <Header />
         <div
           className="min-h-[60vh] flex items-center justify-center"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center">
             <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
@@ -489,7 +489,7 @@ export default function OrdersPage() {
         <Header />
         <div
           className="min-h-[60vh] flex items-center justify-center"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center px-4">
             <Package className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
@@ -510,7 +510,7 @@ export default function OrdersPage() {
       <Header />
       <div
         className="container mx-auto px-4 pb-16"
-        style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+        style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
       >
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">My Orders</h1>

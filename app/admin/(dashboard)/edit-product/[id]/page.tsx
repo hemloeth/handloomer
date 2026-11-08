@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Upload, X, Plus, ArrowLeft } from "lucide-react"
 import { ProductPreviewCard } from "@/components/admin/product-preview-card"
-import { SuccessModal } from "@/components/admin/success-modal"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { AddCategoryModal } from "@/components/admin/add-category-modal"
 import { useCategory } from "@/context/category-context"
@@ -27,11 +27,13 @@ export default function EditProductPage() {
     const router = useRouter()
     const params = useParams()
     const productId = params.id as string
-    const { products, updateProduct, uploadVideo, loading } = useProducts()
+    const { updateProduct, uploadVideo } = useProducts()
     const { categories: dbCategories } = useCategory()
+    const [loadState, setLoadState] = useState<"loading" | "loaded" | "error" | "not-found">("loading")
+    const [loadError, setLoadError] = useState<string | null>(null)
+    const [reloadKey, setReloadKey] = useState(0)
+    const [isUpdating, setIsUpdating] = useState(false)
 
-    const [showSuccessModal, setShowSuccessModal] = useState(false)
-    const [lastAddedName, setLastAddedName] = useState("")
     const [mainImage, setMainImage] = useState<string | null>(null)
     const [mainImageFile, setMainImageFile] = useState<File | null>(null)
     const [galleryImages, setGalleryImages] = useState<string[]>([])
@@ -79,56 +81,64 @@ export default function EditProductPage() {
     const [sareeSize, setSareeSize] = useState("")
     const [blouseSize, setBlouseSize] = useState("")
     const [washCare, setWashCare] = useState("")
-    const [dispatch, setDispatch] = useState("2-3 days")
-    const [disclaimer, setDisclaimer] = useState("Actual product color may differ slightly from the images due to lighting and display differences.")
-    const [internationalNote, setInternationalNote] = useState("Custom duties")
+    const [dispatch, setDispatch] = useState("")
+    const [disclaimer, setDisclaimer] = useState("")
+    const [internationalNote, setInternationalNote] = useState("")
 
-    // Fetch full product data from API to ensure we get excluded fields like galleryImages
+    // Edit never assumes defaults — every field loads from stored product.
     useEffect(() => {
+        let cancelled = false
         const fetchProduct = async () => {
+            setLoadState("loading")
+            setLoadError(null)
             try {
                 const res = await fetch(`${API_BASE_URL}/api/product/${productId}`);
-                const data = await res.json();
-                if (data && data.success && data.product) {
-                    const product = data.product;
-                    setName(product.name || "")
-                    setSku(product.sku || "")
-                    setCategory(product.category || "")
-                    setRegularPrice(product.regularPrice?.toString() || "")
-                    setPrice(product.price?.toString() || "")
-                    setStock(product.stock?.toString() || "")
-                    setShortDescription(product.shortDescription || "")
-                    setTags(product.tags || "")
-                    setVideoUrl(product.videoUrl || "")
-                    setColor(product.color || "")
-                    setMaterial(product.material || "")
-                    setSareeSize("5.5 mtr")
-                    setBlouseSize("95 cm")
-                    setWashCare("Dry clean recommended")
-                    setDispatch(product.dispatch || "2-3 days")
-                    setDisclaimer(product.disclaimer || "Actual product color may differ slightly from the images due to lighting and display differences.")
-                    setInternationalNote(product.internationalNote || "Custom duties")
-                    setIsOnSale(product.isOnSale || false)
-                    setProductCollection(product.productCollection ||
-                        (product.isFestive ? "festive" :
-                            product.isOnSale ? "big-sale" : "none"))
-                    // Set existing images as previews
-                    if (product.mainImage) setMainImage(product.mainImage)
-                    if (product.galleryImages?.length) {
-                        // Handle both old string[] format and new object[] format
-                        const urls = product.galleryImages.map((img: any) =>
-                            typeof img === "string" ? img : img.url
-                        )
-                        setGalleryImages(urls)
-                    }
-                    if (product.videoFile) setVideoFile(product.videoFile)
+                const data = await res.json().catch(() => null);
+                if (cancelled) return
+                if (res.status === 404 || !data?.success || !data?.product) {
+                    setLoadState("not-found")
+                    return
                 }
+                const product = data.product;
+                setName(product.name ?? "")
+                setSku(product.sku ?? "")
+                setCategory(product.category ?? "")
+                setRegularPrice(product.regularPrice != null ? String(product.regularPrice) : "")
+                setPrice(product.price != null ? String(product.price) : "")
+                setStock(product.stock != null ? String(product.stock) : "")
+                setShortDescription(product.shortDescription ?? "")
+                setTags(product.tags ?? "")
+                setVideoUrl(product.videoUrl ?? "")
+                setColor(product.color ?? "")
+                setMaterial(product.material ?? "")
+                setSareeSize(product.sareeSize ?? "")
+                setBlouseSize(product.blouseSize ?? "")
+                setWashCare(product.washCare ?? "")
+                setDispatch(product.dispatch ?? "")
+                setDisclaimer(product.disclaimer ?? "")
+                setInternationalNote(product.internationalNote ?? "")
+                setIsOnSale(product.isOnSale ?? false)
+                setProductCollection(product.productCollection ?? (product.isFestive ? "festive" : product.isOnSale ? "big-sale" : "none"))
+                // Set existing images as previews
+                if (product.mainImage) setMainImage(product.mainImage)
+                if (product.galleryImages?.length) {
+                    // Handle both old string[] format and new object[] format
+                    const urls = product.galleryImages.map((img: any) =>
+                        typeof img === "string" ? img : img.url
+                    )
+                    setGalleryImages(urls)
+                }
+                if (product.videoFile) setVideoFile(product.videoFile)
+                setLoadState("loaded")
             } catch (err) {
-                console.error("Failed to fetch product details:", err);
+                if (cancelled) return
+                setLoadError(err instanceof Error ? err.message : "Could not load product.")
+                setLoadState("error")
             }
         };
         fetchProduct();
-    }, [productId])
+        return () => { cancelled = true }
+    }, [productId, reloadKey])
 
     const handleMainImage = (files: FileList | File[]) => {
         const file = Array.from(files)[0]
@@ -175,15 +185,14 @@ export default function EditProductPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        setLastAddedName(name)
-
+        if (loadState !== "loaded" || isUpdating) return
+        setIsUpdating(true)
         try {
             const compressionOptions = {
                 maxSizeMB: 2,
                 maxWidthOrHeight: 1920,
-                useWebWorker: false, // Disabled to prevent potential browser hangs
+                useWebWorker: false,
             };
-
             const formData = new FormData()
             formData.append("name", name)
             formData.append("sku", sku)
@@ -207,12 +216,8 @@ export default function EditProductPage() {
             if (removeVideo) {
                 formData.append("removeVideo", "true")
             }
-
-            // Identify which existing gallery images were kept vs removed
             const existingUrls = galleryImages.filter(img => !img.startsWith('blob:') && !img.startsWith('data:'));
             formData.append("existingGalleryImages", JSON.stringify(existingUrls.map(url => ({ url }))));
-
-            // Only append image files if new ones were selected
             if (mainImageFile) {
                 const compressedMainImage = await imageCompression(mainImageFile, compressionOptions);
                 formData.append("mainImage", compressedMainImage, compressedMainImage.name)
@@ -223,32 +228,40 @@ export default function EditProductPage() {
                 );
                 compressedGalleryImages.forEach((file) => formData.append("galleryImages", file, file.name))
             }
-
             if (videoFileRaw) {
                 formData.append("videoFile", videoFileRaw)
             }
-
-            const product = await updateProduct(productId, formData)
-
-            // Show Success Modal
-            setShowSuccessModal(true)
-        } catch (err) {
-            console.error("Failed to update product", err)
+            // Provider updates state immediately with response product.
+            await updateProduct(productId, formData)
+            toast.success("Product updated successfully")
+        } catch (err: any) {
+            toast.error(err?.message || "Could not update product")
+        } finally {
+            setIsUpdating(false)
         }
+    }
+
+    if (loadState === "loading") {
+        return <div className="p-8 animate-pulse text-center text-muted-foreground">Loading product…</div>
+    }
+    if (loadState === "not-found") {
+        return <div className="p-8 text-center"><p className="mb-4">Product not found.</p><Button onClick={() => router.push("/admin/products")}>Back to Products</Button></div>
+    }
+    if (loadState === "error") {
+        return (
+            <div className="p-8 text-center">
+                <p className="mb-2">Could not load product.</p>
+                {loadError && <p className="mb-4 text-sm text-muted-foreground">{loadError}</p>}
+                <div className="flex justify-center gap-2">
+                    <Button onClick={() => setReloadKey((k) => k + 1)}>Retry</Button>
+                    <Button variant="outline" onClick={() => router.push("/admin/products")}>Back to Products</Button>
+                </div>
+            </div>
+        )
     }
 
     return (
         <div className="-m-4 md:-m-6">
-            <SuccessModal
-                isOpen={showSuccessModal}
-                onClose={() => {
-                    setShowSuccessModal(false)
-                    router.push("/admin/products")
-                }}
-                productName={lastAddedName}
-                title="Product Updated!"
-                description="has been successfully updated in your catalog."
-            />
             <AddCategoryModal
                 isOpen={isCategoryModalOpen}
                 onClose={() => setIsCategoryModalOpen(false)}
@@ -303,7 +316,7 @@ export default function EditProductPage() {
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={resolveMediaUrl(mainImage)} alt="Main Preview" className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <Button size="sm" variant="secondary" className="font-bold">Replace</Button>
+                                                    <Button type="button" size="sm" variant="secondary" className="font-bold">Replace</Button>
                                                 </div>
                                             </div>
                                         ) : (
@@ -392,18 +405,18 @@ export default function EditProductPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="regular-price" className="text-xs font-bold">Regular Price (₹)</Label>
-                                    <Input id="regular-price" type="number" step="0.01" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0.00" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="regular-price" type="number" step="0.01" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value)} placeholder="0.00" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="price" className="text-xs font-bold">Sale Price (₹)</Label>
-                                    <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0.00" required className="h-9 border-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required className="h-9 border-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="stock" className="text-xs font-bold">Available Stock</Label>
-                                    <Input id="stock" type="number" value={stock} onChange={(e) => setStock(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="stock" type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="tags" className="text-xs font-bold">Tags</Label>
@@ -541,16 +554,17 @@ export default function EditProductPage() {
                             <Button type="button" variant="outline" onClick={() => router.push("/admin/products")} size="lg" className="px-8 h-12 text-base font-bold">
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={loading} size="lg" className="px-10 h-12 text-base font-bold shadow-lg shadow-primary/20">
-                                {loading ? "Updating Product..." : "Update Product"}
+                            <Button type="submit" disabled={isUpdating} size="lg" className="px-10 h-12 text-base font-bold shadow-lg shadow-primary/20">
+                                {isUpdating ? "Updating…" : "Update Product"}
                             </Button>
                         </div>
                     </form>
                 </div>
 
                 {/* Preview Section */}
+                {/* Preview Section — sticky below fixed 64px admin header */}
                 <div className="w-full xl:w-[400px] shrink-0 bg-background xl:border-l p-6 hidden xl:block">
-                    <div className="sticky top-0 space-y-6">
+                    <div className="sticky top-[76px] space-y-6">
                         <div className="flex items-center justify-between border-b pb-4">
                             <h3 className="text-lg font-bold tracking-tight">Live Preview</h3>
                             <Badge variant="outline" className="text-[10px]">REAL-TIME</Badge>

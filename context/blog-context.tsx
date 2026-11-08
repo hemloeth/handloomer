@@ -49,15 +49,10 @@ export function BlogProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true)
             const data = await apiPost('/api/blog/add-blog', blogData)
-
-            if (data.success && data.blog) {
-                setBlogs((prev) => [...prev, data.blog])
-            } else {
-                console.error("Failed to add blog:", data.message)
+            if (!data.success || !data.blog) {
+                throw new Error(data.message || "Failed to add blog")
             }
-        } catch (error) {
-            console.error("Error adding blog:", error)
-            throw error
+            setBlogs((prev) => [...prev, data.blog])
         } finally {
             setLoading(false)
         }
@@ -67,15 +62,10 @@ export function BlogProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true)
             const data = await apiDelete(`/api/blog/${id}`)
-
-            if (data.success) {
-                setBlogs((prev) => prev.filter((blog) => blog._id !== id))
-            } else {
-                console.error("Failed to delete blog:", data.message)
+            if (!data.success) {
+                throw new Error(data.message || "Failed to delete blog")
             }
-        } catch (error) {
-            console.error("Error deleting blog:", error)
-            throw error
+            setBlogs((prev) => prev.filter((blog) => blog._id !== id))
         } finally {
             setLoading(false)
         }
@@ -85,17 +75,12 @@ export function BlogProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true)
             const data = await apiPut(`/api/blog/update/${id}`, blogData)
-
-            if (data.success && data.blog) {
-                setBlogs((prev) =>
-                    prev.map((blog) => (blog._id === id ? data.blog : blog))
-                )
-            } else {
-                console.error("Failed to update blog:", data.message)
+            if (!data.success || !data.blog) {
+                throw new Error(data.message || "Failed to update blog")
             }
-        } catch (error) {
-            console.error("Error updating blog:", error)
-            throw error
+            setBlogs((prev) =>
+                prev.map((blog) => (blog._id === id ? data.blog : blog))
+            )
         } finally {
             setLoading(false)
         }

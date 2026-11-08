@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { FilterOptions, SortOption } from "@/lib/products"
-import { useProducts } from "@/context/product-context"
+import { fetchPaginatedProductsClient, type FilterOptions, type SortOption, type Product } from "@/lib/products"
 import { SearchResults } from "@/components/search/search-results"
 import { PageHeroSlider } from "@/components/sections/page-hero-slider"
 import { Header } from "@/components/layout/header"
@@ -41,54 +40,77 @@ const searchSlides = [
 const POPULAR_TAGS = ['Pure Linen', 'Banarasi Silk', 'Handloom', 'Festive Saree', 'Golden Zari', 'Pink', 'Red', 'Organza']
 
 function SearchContent() {
-  const { searchProducts } = useProducts()
   const searchParams = useSearchParams()
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [filters, setFilters] = useState<FilterOptions>({})
   const [sortBy, setSortBy] = useState<SortOption>('featured')
-  const [results, setResults] = useState(() => searchProducts('', {}, 'featured'))
+  const [results, setResults] = useState<Product[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const generationRef = useRef(0)
 
+  // Sync query from URL (one-way: URL -> state). Fetching is separate below.
   useEffect(() => {
     const searchQuery = searchParams.get('q') || ''
     setQuery(searchQuery)
     setInputValue(searchQuery)
-    const newResults = searchProducts(searchQuery, filters, sortBy)
-    setResults(newResults)
+    document.title = searchQuery
+      ? `Search: ${searchQuery} - The Handloomer`
+      : 'Search Products - The Handloomer'
+  }, [searchParams])
 
-    // Update page title
-    if (searchQuery) {
-      document.title = `Search: ${searchQuery} - The Handloomer`
-    } else {
-      document.title = 'Search Products - The Handloomer'
+  // Backend-driven search + filters + sort (full DB, not global-100).
+  // Previous results stay visible during fetch; only latest wins; failed
+  // fetch keeps valid results (no wipe).
+  useEffect(() => {
+    const generation = ++generationRef.current
+    let cancelled = false
+    setIsSearching(true)
+    const params: Record<string, unknown> = {
+      limit: 100,
+      page: 1,
+      sortBy: sortBy === 'featured' || sortBy === 'color-asc' || sortBy === 'color-desc' ? 'newest' : sortBy,
     }
-  }, [searchParams, filters, sortBy, searchProducts])
+    if (query.trim()) params.search = query.trim()
+    if (filters.categories?.length) params.category = filters.categories.join(',')
+    if (filters.colors?.length) params.color = filters.colors.join(',')
+    if (filters.fabrics?.length) params.material = filters.fabrics.join(',')
+    if (filters.priceRange) {
+      params.priceMin = filters.priceRange.min
+      params.priceMax = filters.priceRange.max
+    }
+    if (filters.isOnSale !== undefined) params.isOnSale = String(filters.isOnSale)
+    // `isNew` here is the explicit New Arrivals flag (isNewArrival=true).
+    if (filters.isNew !== undefined) params.isNewArrival = String(filters.isNew)
+    ;(async () => {
+      try {
+        const { products } = await fetchPaginatedProductsClient(params)
+        if (cancelled || generation !== generationRef.current) return
+        setResults(products)
+      } catch (err) {
+        if (cancelled || generation !== generationRef.current) return
+        console.error('Search failed', err)
+      } finally {
+        if (!cancelled && generation === generationRef.current) setIsSearching(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [query, filters, sortBy])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = inputValue.trim()
     setQuery(trimmed)
-    const newResults = searchProducts(trimmed, filters, sortBy)
-    setResults(newResults)
-
-    // Update URL
     const url = new URL(window.location.href)
-    if (trimmed) {
-      url.searchParams.set('q', trimmed)
-    } else {
-      url.searchParams.delete('q')
-    }
+    if (trimmed) url.searchParams.set('q', trimmed)
+    else url.searchParams.delete('q')
     window.history.pushState({}, '', url.toString())
   }
 
   const handleSuggestionClick = (suggestion: string) => {
     setInputValue(suggestion)
     setQuery(suggestion)
-    const newResults = searchProducts(suggestion, filters, sortBy)
-    setResults(newResults)
-
-    // Update URL
     const url = new URL(window.location.href)
     url.searchParams.set('q', suggestion)
     window.history.pushState({}, '', url.toString())
@@ -97,8 +119,6 @@ function SearchContent() {
   const handleClearSearch = () => {
     setInputValue('')
     setQuery('')
-    const newResults = searchProducts('', filters, sortBy)
-    setResults(newResults)
     const url = new URL(window.location.href)
     url.searchParams.delete('q')
     window.history.pushState({}, '', url.toString())
@@ -107,21 +127,19 @@ function SearchContent() {
   const handleFiltersChange = (newFilters: FilterOptions, newSortBy: SortOption) => {
     setFilters(newFilters)
     setSortBy(newSortBy)
-    const newResults = searchProducts(query, newFilters, newSortBy)
-    setResults(newResults)
   }
 
   return (
     <>
       {/* Hero Section with Auto-Scroll if no query */}
       {!query && (
-        <div className="mt-[96px] lg:mt-[104px]">
+        <div style={{ marginTop: "var(--header-offset)" }}>
           <PageHeroSlider slides={searchSlides} height="30vh" />
         </div>
       )}
 
       {/* Main Content */}
-      <div className={`bg-background py-10 lg:py-16 ${query ? 'mt-[96px] lg:mt-[104px]' : ''}`}>
+      <div className="bg-background py-10 lg:py-16" style={query ? { marginTop: "var(--header-offset)" } : undefined}>
         <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
           {/* Top Search Bar & Header */}
           <div className="max-w-3xl mx-auto mb-10 text-center">
@@ -143,10 +161,9 @@ function SearchContent() {
               {query ? `Search Results` : `Search Collection`}
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground mb-6">
-              {query 
-                ? `Showing results for “${query}” (${results.length} found)`
-                : `Find your dream linen saree by color, weave, occasion, or style`
-              }
+              {query
+                ? `Showing results for “${query}” (${results.length} found)${isSearching ? ' …' : ''}`
+                : `Find your dream linen saree by color, weave, occasion, or style`}
             </p>
 
             {/* Interactive Search Input Box */}
@@ -224,7 +241,7 @@ export default function SearchPage() {
       <Header />
 
       <Suspense fallback={
-        <div className="mt-[96px] lg:mt-[104px] min-h-[50vh] flex items-center justify-center">
+        <div className="min-h-[50vh] flex items-center" style={{ marginTop: "var(--header-offset)" }}>
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">Loading search results...</p>

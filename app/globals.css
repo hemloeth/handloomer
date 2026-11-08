@@ -5,6 +5,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Deterministic header offset — measured with announcement visible:
+   320/375/390=159, 430=131, 600=115, 640=117, 768=121,
+   800-1000=105, 1024=113, 1280+=97. Header is the single JS owner
+   refining this var post-hydration; hero only consumes it. */
 :root {
   --background: #FAF8F5;
   --foreground: #2C2420;
@@ -39,6 +43,49 @@
   --sidebar-accent-foreground: #2C2420;
   --sidebar-border: #E5DED6;
   --sidebar-ring: #8B7355;
+  --header-offset: 159px;
+}
+
+@media (min-width: 420px) {
+  :root {
+    --header-offset: 131px;
+  }
+}
+
+@media (min-width: 576px) {
+  :root {
+    --header-offset: 115px;
+  }
+}
+
+@media (min-width: 640px) {
+  :root {
+    --header-offset: 117px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --header-offset: 121px;
+  }
+}
+
+@media (min-width: 800px) {
+  :root {
+    --header-offset: 105px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --header-offset: 113px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --header-offset: 97px;
+  }
 }
 
 .dark {
@@ -274,15 +321,5 @@ button:disabled,
   scrollbar-width: none;
 }
 
-/* Hide scrollbars across the entire admin dashboard while preserving smooth scrolling */
-[data-admin-root],
-[data-admin-root] * {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-}
-[data-admin-root]::-webkit-scrollbar,
-[data-admin-root] *::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
+/* Admin keeps native subtle scrollbars — long forms need position affordance.
+   Only explicit `.hide-scrollbar` components opt out. */

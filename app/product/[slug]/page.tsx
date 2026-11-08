@@ -134,7 +134,7 @@ export default async function ProductPage({ params }: Props) {
       <Header />
       <JsonLd data={jsonLd} />
 
-      <div style={{ paddingTop: 'calc(var(--header-offset, 100px))' }}>
+      <div style={{ paddingTop: 'calc(var(--header-offset))' }}>
         <ProductDetails product={product} />
 
         {/* Reviews Section */}

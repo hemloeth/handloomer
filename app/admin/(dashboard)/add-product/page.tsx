@@ -140,7 +140,11 @@ export default function AddProductPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!mainImageFile) return
+        if (!mainImageFile) {
+            showToast("Main image required", "Please upload a main product image.")
+            document.getElementById("main-image-upload")?.scrollIntoView({ behavior: "smooth", block: "center" })
+            return
+        }
         
         setIsSubmitting(true)
         setLastAddedName(name)
@@ -272,19 +276,18 @@ export default function AddProductPage() {
                                         <Label className="text-xs font-bold text-primary">Main Display Image</Label>
                                         <Badge variant="default" className="bg-primary/90 text-[10px] py-0 h-5 px-2">PRIMARY</Badge>
                                     </div>
-                                    <div
-                                        className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 relative aspect-[4/5] ${isDraggingMain ? "border-primary bg-primary/10 ring-4 ring-primary/10" : "border-primary/20 bg-primary/5 hover:border-primary hover:bg-primary/[0.08]"
-                                            }`}
+                                    <label
+                                        htmlFor="main-image-upload"
+                                        className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 relative aspect-[4/5] ${isDraggingMain ? "border-primary bg-primary/10 ring-4 ring-primary/10" : "border-primary/20 bg-primary/5 hover:border-primary hover:bg-primary/[0.08]"}`}
                                         onDragOver={(e) => { e.preventDefault(); setIsDraggingMain(true); }}
                                         onDragLeave={() => setIsDraggingMain(false)}
                                         onDrop={(e) => { e.preventDefault(); setIsDraggingMain(false); if (e.dataTransfer.files) handleMainImage(e.dataTransfer.files); }}
-                                        onClick={() => document.getElementById("main-image-upload")?.click()}
                                     >
                                         <Input
                                             id="main-image-upload"
                                             type="file"
                                             accept="image/*"
-                                            className="hidden"
+                                            className="sr-only"
                                             onChange={(e) => e.target.files && handleMainImage(e.target.files)}
                                         />
                                         {mainImage ? (
@@ -292,7 +295,7 @@ export default function AddProductPage() {
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={resolveMediaUrl(mainImage)} alt="Main Preview" className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <Button size="sm" variant="secondary" className="font-bold cursor-pointer">Replace</Button>
+                                                    <Button type="button" size="sm" variant="secondary" className="font-bold cursor-pointer">Replace</Button>
                                                 </div>
                                             </div>
                                         ) : (
@@ -303,7 +306,7 @@ export default function AddProductPage() {
                                                 <div className="text-xs font-bold text-primary/80">Upload Main Photo</div>
                                             </div>
                                         )}
-                                    </div>
+                                    </label>
                                 </div>
 
                                 {/* Gallery Images Section */}
@@ -381,18 +384,18 @@ export default function AddProductPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="regular-price" className="text-xs font-bold">Regular Price (₹)</Label>
-                                    <Input id="regular-price" type="number" step="0.01" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0.00" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="regular-price" type="number" step="0.01" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value)} placeholder="0.00" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="price" className="text-xs font-bold">Sale Price (₹)</Label>
-                                    <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0.00" required className="h-9 border-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required className="h-9 border-primary/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="stock" className="text-xs font-bold">Available Stock</Label>
-                                    <Input id="stock" type="number" value={stock} onChange={(e) => setStock(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} placeholder="0" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                    <Input id="stock" type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" required className="h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="tags" className="text-xs font-bold">Tags</Label>
@@ -560,7 +563,7 @@ export default function AddProductPage() {
 
                 {/* Preview Section */}
                 <div className="w-full xl:w-[400px] shrink-0 bg-background xl:border-l p-6 hidden xl:block">
-                    <div className="sticky top-0 space-y-6">
+                    <div className="sticky top-[76px] space-y-6">
                         <div className="flex items-center justify-between border-b pb-4">
                             <h3 className="text-lg font-bold tracking-tight">Live Preview</h3>
                             <Badge variant="outline" className="text-[10px]">REAL-TIME</Badge>

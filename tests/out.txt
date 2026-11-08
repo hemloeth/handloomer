@@ -1,0 +1,55 @@
+▶ Edit Product integrity
+  ✔ no hardcoded spec defaults in edit fetch (1.4017ms)
+  ✔ every spec loads from stored product (0.3961ms)
+  ✔ explicit load states gate submission (0.2588ms)
+  ✔ update uses local submitting state + Sonner toasts (0.3403ms)
+✔ Edit Product integrity (4.4933ms)
+▶ Mutation errors propagate (no false success)
+  ✔ deleteProduct throws (0.4034ms)
+  ✔ deleteCategory throws (0.2096ms)
+  ✔ gallery + video mutations throw (no silent swallow) (0.2126ms)
+  ✔ blog mutations throw on success:false (0.3808ms)
+  ✔ products/categories callers show error toasts (1.3826ms)
+✔ Mutation errors propagate (no false success) (3.2563ms)
+▶ Admin session + logout + freshness
+  ✔ layout verifies backend token but skips loader when already verified (0.3576ms)
+  ✔ logout calls backend before clearing local state (0.5278ms)
+  ✔ provider keeps stale-time, dedupe, race guards and separate refresh flag (0.3923ms)
+✔ Admin session + logout + freshness (1.5541ms)
+▶ Pagination, scroll, forms, navigation
+  ✔ admin products uses backend pagination, not global-100 slicing (0.4667ms)
+  ✔ number inputs use native scrolling (no wheel-blur interruption) (0.6276ms)
+  ✔ previews stick below 64px header; admin scrollbars restored (0.7745ms)
+  ✔ Replace buttons are type=button; add-product validates image with feedback (0.5332ms)
+  ✔ desktop hamburger removed; mobile drawer has dialog semantics + Escape (0.5144ms)
+✔ Pagination, scroll, forms, navigation (3.2848ms)
+▶ Dashboard, customers, blog
+  ✔ dashboard fails honestly instead of zero metrics (0.3717ms)
+  ✔ customers uses single deterministic query with newest-wins cancel (0.3383ms)
+  ✔ uploadVideo + gallery throw to callers (119.7528ms)
+✔ Dashboard, customers, blog (121.2552ms)
+▶ Blog HTML sanitization
+  ✔ strips scripts, handlers, javascript URLs; keeps formatting (2.5916ms)
+  ✔ backend sanitizes add/update before save (2.1013ms)
+✔ Blog HTML sanitization (5.042ms)
+Failed to fetch products ApiError: Nope
+    at request (C:\Users\Rustam\Desktop\handloomer\linen-saree\lib\api.ts:343:15)
+    at async C:/Users/Rustam/Desktop/handloomer/linen-saree/context/product-context.tsx:125:22 {
+  status: 400,
+  data: { success: false, message: 'Nope' }
+}
+✖ tests\admin-stabilization.test.mjs (30012.8405ms)
+ℹ tests 23
+ℹ suites 6
+ℹ pass 22
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 30028.7948
+
+✖ failing tests:
+
+test at tests\admin-stabilization.test.mjs:1:1
+✖ tests\admin-stabilization.test.mjs (30012.8405ms)
+  'test failed'

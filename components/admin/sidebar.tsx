@@ -19,7 +19,7 @@ import {
     Tag
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { clearAdminToken } from "@/lib/api"
+import { apiPost, clearAdminToken } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 
 interface AdminSidebarProps {
@@ -137,6 +137,25 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
         }
     }, [pathname])
 
+    // Mobile drawer: Escape to close + restore focus to trigger.
+    const lastTriggerRef = useRef<HTMLElement | null>(null)
+    useEffect(() => {
+        if (!isOpen) return
+        const prevFocus = document.activeElement as HTMLElement | null
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose()
+        }
+        document.addEventListener("keydown", onKey)
+        const focusTimer = setTimeout(() => {
+            document.querySelector<HTMLElement>("[data-admin-drawer] button, [data-admin-drawer] a")?.focus()
+        }, 0)
+        return () => {
+            document.removeEventListener("keydown", onKey)
+            clearTimeout(focusTimer)
+            prevFocus?.focus?.()
+        }
+    }, [isOpen, onClose])
+
     const handleMouseEnter = () => {
         if (closeTimeoutRef.current) {
             clearTimeout(closeTimeoutRef.current)
@@ -168,10 +187,15 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
         }
     }
 
-    const handleLogout = () => {
-        localStorage.removeItem("auth_user")
-        clearAdminToken()
-        window.location.href = "/admin"
+    const handleLogout = async () => {
+        try {
+            try { await apiPost("/api/user/logout", {}) } catch {}
+            try { sessionStorage.removeItem("handloomer_admin_session_verified") } catch {}
+            localStorage.removeItem("auth_user")
+            clearAdminToken()
+        } finally {
+            window.location.href = "/admin"
+        }
     }
 
     const renderNav = (isMobile: boolean = false) => {
@@ -251,7 +275,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
 
     return (
         <>
-            {/* Desktop Collapsible Hover Sidebar: rail by default (w-16), expands to fat (280px) over content on hover */}
+            {/* Desktop rail: hover OR keyboard focus expands (focus-within). */}
             <aside
                 className={cn(
                     "hidden lg:flex fixed top-16 bottom-0 left-0 flex-col border-r bg-card z-40 transition-all duration-200 ease-out overflow-hidden",
@@ -259,6 +283,8 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 )}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
+                onFocus={handleMouseEnter}
+                onBlur={handleMouseLeave}
                 data-lenis-prevent
             >
                 {renderNav(false)}
@@ -276,6 +302,10 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             {/* Mobile Slide-Over Drawer: fat 280px width */}
             {isOpen && (
                 <aside
+                    data-admin-drawer
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Admin navigation"
                     className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r bg-card lg:hidden shadow-2xl animate-in slide-in-from-left duration-200"
                     data-lenis-prevent
                 >

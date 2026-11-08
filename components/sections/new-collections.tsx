@@ -1,33 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { ProductCard } from "@/components/products/product-card"
 import type { Product } from "@/lib/products"
 
-import { useProducts } from "@/context/product-context"
 
-function ProductSkeleton() {
-  return (
-    <div className="animate-pulse">
-      <div className="aspect-[2/3] md:aspect-[4/5] bg-muted rounded-sm mb-4" />
-      <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-      <div className="h-3 bg-muted rounded w-1/2 mb-2" />
-      <div className="h-4 bg-muted rounded w-1/3 mb-4" />
-      <div className="flex gap-2">
-        <div className="h-10 bg-muted rounded w-12" />
-        <div className="h-10 bg-muted rounded flex-1" />
-      </div>
-    </div>
-  )
-}
 
-export function NewCollections() {
-  const { mappedProducts, loading } = useProducts()
-
-  // Just grab the first 20 items
-  const products = mappedProducts.slice(0, 20)
+/**
+ * "Latest Arrivals" = newest by `createdAt` DESC (backend `sortBy=newest`).
+ * Does NOT filter `isNewArrival` (that flag controls only the explicit
+ * "New Arrivals" collection + `isNew` filter). Products come from the
+ * server homepage fetch (`fetchNewestProducts`, 20 only) — never sliced
+ * from the global provider's first-100 window, so >100-product catalogs
+ * still show the true newest 20.
+ */
+export function NewCollections({ initialProducts = [] }: { initialProducts?: Product[] }) {
+  const products = initialProducts
 
   return (
     <section className="py-16 md:py-20 bg-background">
@@ -51,20 +40,16 @@ export function NewCollections() {
 
         {/* Products Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-          {loading
-            ? Array.from({ length: 20 }).map((_, i) => (
-              <ProductSkeleton key={i} />
+          {products.length > 0
+            ? products.map((product) => (
+              <ProductCard key={product.id} product={product} />
             ))
-            : products.length > 0
-              ? products.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))
-              : (
-                <div className="col-span-full text-center py-12 text-muted-foreground">
-                  <p className="text-lg">No products available yet.</p>
-                  <p className="text-sm mt-1">New arrivals coming soon!</p>
-                </div>
-              )}
+            : (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                <p className="text-lg">No products available yet.</p>
+                <p className="text-sm mt-1">New arrivals coming soon!</p>
+              </div>
+            )}
         </div>
 
         {/* Show More Button */}

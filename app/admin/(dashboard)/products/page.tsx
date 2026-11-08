@@ -30,11 +30,17 @@ import { QuickSaleModal } from "@/components/admin/quick-sale-modal"
 let toastId = 0
 
 export default function AdminProductsPage() {
-  const { products, refreshProducts, deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
+  const { refreshProducts, deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageProducts, setPageProducts] = useState<any[]>([])
+  const [totalProducts, setTotalProducts] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [isLoadingPage, setIsLoadingPage] = useState(true)
+  const [activeTab, setActiveTab] = useState<'all' | 'sale'>('all')
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
@@ -48,15 +54,45 @@ export default function AdminProductsPage() {
     }
   }
 
-  // Refetch live stock on mount
+  // Backend pagination/search/filter (full catalog, not global-100).
+  // Previous page stays visible during fetch; latest wins via generation.
   useEffect(() => {
-    refreshProducts?.()
-  }, [refreshProducts])
+    let cancelled = false
+    const gen = { value: 0 }
+    const load = async () => {
+      const myGen = ++gen.value
+      setIsLoadingPage(true)
+      try {
+        const { apiGet } = await import("@/lib/api")
+        const q = new URLSearchParams({
+          page: String(page),
+          limit: "20",
+          sortBy: "newest",
+        })
+        if (searchTerm.trim()) q.set("search", searchTerm.trim())
+        if (activeTab === "sale") q.set("isOnSale", "true")
+        const data = await apiGet(`/api/product/allproducts?${q.toString()}`)
+        if (cancelled || myGen !== gen.value) return
+        if (data?.success && data.products) {
+          setPageProducts(data.products)
+          setTotalProducts(data.pagination?.totalProducts ?? data.products.length)
+          setTotalPages(data.pagination?.totalPages ?? 1)
+        }
+      } catch (err: any) {
+        if (cancelled) return
+        showToast("Load failed", err?.message || "Could not load products", "error")
+      } finally {
+        if (!cancelled) setIsLoadingPage(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [page, searchTerm, activeTab])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [updatingField, setUpdatingField] = useState<string | null>(null)
   const [activeSaleProduct, setActiveSaleProduct] = useState<any | null>(null)
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'sale'>('all')
+
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set())
 
   const toggleExpandName = (id: string) => {
@@ -74,16 +110,9 @@ export default function AdminProductsPage() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
-  const filteredProducts = useMemo(
-    () => products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesTab = activeTab === 'all' || product.isOnSale
-      return matchesSearch && matchesTab
-    }),
-    [products, searchTerm, activeTab]
-  )
-
-  const saleCount = useMemo(() => products.filter(p => p.isOnSale).length, [products])
+  // Table is driven by backend page (full catalog). Filtering/search/tab
+  // are backend queries, not the global provider's first-100 window.
+  const filteredProducts = pageProducts
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p._id))
 
@@ -115,8 +144,8 @@ export default function AdminProductsPage() {
       await deleteProduct(deleteTarget.id)
       setDeleteTarget(null)
       showToast("Product Deleted", `"${deletedName}" has been deleted successfully`)
-    } catch {
-      // error handled in context
+    } catch (err: any) {
+      showToast("Delete failed", err?.message || "Could not delete product", "error")
     } finally {
       setIsDeleting(false)
     }
@@ -158,8 +187,8 @@ export default function AdminProductsPage() {
         `${deletedCount} product(s) deleted successfully`
       )
       exitSelectionMode()
-    } catch {
-      // error handled in context
+    } catch (err: any) {
+      showToast("Bulk delete failed", err?.message || "Could not delete products", "error")
     } finally {
       setIsBulkDeleting(false)
     }
@@ -229,14 +258,14 @@ export default function AdminProductsPage() {
         <div className="flex items-center gap-3">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight font-serif text-primary">Products</h2>
           <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
-            ({products.length} in catalog)
+            ({totalProducts > 0 ? totalProducts : pageProducts.length} in catalog)
           </span>
         </div>
 
         {/* Compact Tab Switcher */}
         <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit border border-primary/10 whitespace-nowrap">
           <button
-            onClick={() => setActiveTab('all')}
+            onClick={() => { setActiveTab('all'); setPage(1) }}
             className={`relative px-3 py-1.5 text-xs font-bold transition-all rounded-md flex items-center gap-1.5 ${
               activeTab === 'all' ? 'bg-background text-primary shadow-xs' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -245,11 +274,11 @@ export default function AdminProductsPage() {
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono whitespace-nowrap ${
               activeTab === 'all' ? 'bg-primary/10 text-primary font-bold' : 'bg-muted text-muted-foreground'
             }`}>
-              {products.length}
+              {totalProducts > 0 ? totalProducts : pageProducts.length}
             </span>
           </button>
           <button
-            onClick={() => setActiveTab('sale')}
+            onClick={() => { setActiveTab('sale'); setPage(1) }}
             className={`relative px-3 py-1.5 text-xs font-bold transition-all rounded-md flex items-center gap-1.5 ${
               activeTab === 'sale' ? 'bg-background text-orange-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -258,7 +287,7 @@ export default function AdminProductsPage() {
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono whitespace-nowrap ${
               activeTab === 'sale' ? 'bg-orange-500/10 text-orange-600 font-bold' : 'bg-muted text-muted-foreground'
             }`}>
-              {saleCount}
+              {activeTab === 'sale' ? totalProducts : pageProducts.filter(p => p.isOnSale).length}
             </span>
           </button>
         </div>
@@ -283,7 +312,7 @@ export default function AdminProductsPage() {
           <Input
             placeholder="Search products..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }}
             className="pl-8 h-8 text-xs rounded-none"
           />
         </div>
@@ -540,6 +569,14 @@ export default function AdminProductsPage() {
             })}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex items-center justify-between py-3 text-xs text-muted-foreground">
+        <span>Page {page} of {totalPages}{isLoadingPage ? " · Loading…" : ""} ({totalProducts} total) — query is backend-driven</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1 || isLoadingPage} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
+          <Button variant="outline" size="sm" disabled={page >= totalPages || isLoadingPage} onClick={() => setPage((p) => p + 1)}>Next</Button>
+        </div>
       </div>
 
       {/* Floating Action Bar — always visible in selection mode */}

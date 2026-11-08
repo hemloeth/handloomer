@@ -9,14 +9,19 @@ import { TrustSection } from "@/components/sections/trust-section"
 import { NewsletterSection } from "@/components/sections/newsletter-section"
 import { Footer } from "@/components/layout/footer"
 import { apiServerGet } from "@/lib/api"
+import { fetchNewestProducts } from "@/lib/products"
 
 export default async function Home() {
   // Hero slides and categories are INDEPENDENT reads — fetch them in parallel
   // so the page waits on the slower of the two, not their sum (spec §12). Each
   // handles its own failure so one bad widget can't blank the whole homepage.
-  const [heroResult, catResult] = await Promise.allSettled([
+  // "Latest Arrivals" = newest 20 by createdAt DESC (backend-driven, not
+  // sliced from the global 100-cap provider). no-store, so every full
+  // refresh + client return to "/" gets live DB state.
+  const [heroResult, catResult, newestResult] = await Promise.allSettled([
     apiServerGet('/api/hero', { revalidate: 60 }),
     apiServerGet('/api/category/allcategory', { revalidate: 60 }),
+    fetchNewestProducts(),
   ])
 
   let heroSlides: any[] = []
@@ -33,12 +38,19 @@ export default async function Home() {
     console.error("Failed to fetch categories on server:", catResult.reason)
   }
 
+  let newestProducts: any[] = []
+  if (newestResult.status === "fulfilled" && newestResult.value) {
+    newestProducts = newestResult.value
+  } else if (newestResult.status === "rejected") {
+    console.error("Failed to fetch newest products on server:", newestResult.reason)
+  }
+
   return (
     <main className="min-h-screen">
       <Header />
       <AutoScrollHero initialSlides={heroSlides} />
       <div>
-        <NewCollections />
+        <NewCollections initialProducts={newestProducts} />
         <CategoryGrid initialCategories={categories} />
         <CollectionBanners />
         <VideoSection />

@@ -31,42 +31,41 @@ export default function CustomersPage() {
     const [summary, setSummary] = useState<CustomerSummary>({ total: 0, active: 0, vip: 0, totalRevenue: 0 })
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState("")
+    const [debouncedSearch, setDebouncedSearch] = useState("")
     const [page, setPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
-    const [searchTimeout, setSearchTimeout] = useState<any>(null)
 
     useEffect(() => {
-        fetchCustomers()
-    }, [page])
-
-    // Debounced search
-    useEffect(() => {
-        if (searchTimeout) clearTimeout(searchTimeout)
-        const timeout = setTimeout(() => {
-            setPage(1)
-            fetchCustomers()
-        }, 400)
-        setSearchTimeout(timeout)
-        return () => clearTimeout(timeout)
+        const t = setTimeout(() => setDebouncedSearch(searchTerm), 400)
+        return () => clearTimeout(t)
     }, [searchTerm])
 
-    const fetchCustomers = async () => {
-        try {
-            const { apiGet } = await import("@/lib/api")
-            const query = `?page=${page}&limit=20${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ""}`
-            const data = await apiGet(`/api/admin/customers${query}`)
+    useEffect(() => { setPage(1) }, [debouncedSearch])
 
-            if (data.success) {
-                setCustomers(data.customers)
-                setSummary(data.summary)
-                setTotalPages(data.pagination.totalPages)
+    // Single deterministic query {page, debouncedSearch}; newest wins.
+    useEffect(() => {
+        let cancelled = false
+        const fetchCustomers = async () => {
+            setLoading(true)
+            try {
+                const { apiGet } = await import("@/lib/api")
+                const query = `?page=${page}&limit=20${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ""}`
+                const data = await apiGet(`/api/admin/customers${query}`)
+                if (cancelled) return
+                if (data.success) {
+                    setCustomers(data.customers)
+                    setSummary(data.summary)
+                    setTotalPages(data.pagination.totalPages)
+                }
+            } catch (err) {
+                if (!cancelled) console.error("Failed to fetch customers:", err)
+            } finally {
+                if (!cancelled) setLoading(false)
             }
-        } catch (err) {
-            console.error("Failed to fetch customers:", err)
-        } finally {
-            setLoading(false)
         }
-    }
+        fetchCustomers()
+        return () => { cancelled = true }
+    }, [page, debouncedSearch])
 
     if (loading) {
         return (

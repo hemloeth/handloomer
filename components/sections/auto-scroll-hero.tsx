@@ -98,17 +98,9 @@ export function AutoScrollHero({ initialSlides = [] }: AutoScrollHeroProps) {
     emblaApi.on("reInit", onSelect)
   }, [emblaApi, onSelect])
 
-  useEffect(() => {
-    const updateHeaderOffset = () => {
-      const headerEl = document.getElementById('main-header')
-      if (headerEl) {
-        document.documentElement.style.setProperty('--header-offset', `${headerEl.offsetHeight}px`)
-      }
-    }
-    updateHeaderOffset()
-    window.addEventListener('resize', updateHeaderOffset)
-    return () => window.removeEventListener('resize', updateHeaderOffset)
-  }, [])
+  // --header-offset is owned by the Header component (single owner, defined
+  // in globals.css). The hero only consumes it — no measurement here, so the
+  // first paint already uses the deterministic CSS value (no post-hydration jump).
 
   if (!slides || slides.length === 0) {
     return null
@@ -117,8 +109,8 @@ export function AutoScrollHero({ initialSlides = [] }: AutoScrollHeroProps) {
   return (
     <section
       style={{
-        marginTop: "var(--header-offset, 140px)",
-        height: "calc(100vh - var(--header-offset, 140px))",
+        marginTop: "var(--header-offset)",
+        height: "calc(100vh - var(--header-offset))",
       }}
       className="relative w-full min-h-[540px] max-h-[860px] bg-neutral-950 text-white overflow-hidden group border-b border-foreground/10 select-none"
     >

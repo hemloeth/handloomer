@@ -275,7 +275,7 @@ export function ProductDetails({ product }: ProductDetailsProps) {
           </div>
 
           {/* Product Info */}
-          <div className="lg:col-span-5 xl:col-span-4 lg:py-4 flex flex-col justify-start lg:sticky lg:top-[calc(var(--header-offset,120px)+2rem)] lg:h-fit lg:pb-12">
+          <div className="lg:col-span-5 xl:col-span-4 lg:py-4 flex flex-col justify-start lg:sticky lg:top-[calc(var(--header-offset)+2rem)] lg:h-fit lg:pb-12">
 
             {/* Header: Category & Reviews */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-2">

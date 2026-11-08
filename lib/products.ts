@@ -33,6 +33,17 @@ export interface Product {
   internationalNote?: string
 }
 
+/**
+ * Client stale-time for background catalog refresh (NOT an HTTP cache).
+ * Backend responses remain `Cache-Control: no-store`, so every actual
+ * network request gets live DB state; this constant only decides whether
+ * the client should bother making that request.
+ */
+export const PRODUCT_STALE_TIME_MS = 30_000
+
+/** Homepage "Latest Arrivals" count — newest by `createdAt` DESC. */
+export const HOMEPAGE_PRODUCT_LIMIT = 20
+
 // Map a backend product to the frontend Product interface
 function mapProductFromDB(dbProduct: any): Product {
   const isVideoStr = typeof dbProduct.videoFile === "string" || typeof dbProduct.videoUrl === "string";
@@ -90,18 +101,14 @@ function mapProductFromDB(dbProduct: any): Product {
   };
 }
 
-// Fetch the storefront catalog from the backend and map it.
-// No `limit` is sent, so the backend returns every product (its `limit=undefined`
-// path disables pagination) — this is the single source that seeds the client
-// context for SEO-safe rendering on public pages.
+// Seed for the global provider: first `limit` newest products
+// (`createdAt` DESC, backend default). This is NOT the complete catalog —
+// full-catalog pages MUST use `fetchPaginatedProducts` (or the client
+// variant) with explicit page/limit + filters so catalogs >100 work.
 //
-// It intentionally uses the backend's LIST PROJECTION (no `fullData=true`): the
-// heavy per-product fields (shortDescription/details/sareeSize/blouseSize/
-// washCare/dispatch/disclaimer/internationalNote) are excluded because product
-// CARDS never render them, and this catalog is fetched for EVERY route from the
-// root layout. The full detail payload is loaded per-product on the product page
-// via fetchProductBySku (a single document), so no visible data is lost while the
-// per-route seed payload shrinks substantially.
+// Uses the LIST PROJECTION (no `fullData=true`): heavy per-product fields
+// are excluded because CARDS never render them. Full detail is loaded
+// per-product via `fetchProductBySku`, so no visible data is lost.
 export async function fetchProductsFromDB(limit: number = 100): Promise<Product[]> {
   try {
     const { apiServerGet } = await import("@/lib/api");
@@ -171,6 +178,56 @@ export async function fetchPaginatedProducts(queryParams: Record<string, any> = 
     console.error(`Error fetching paginated products:`, error.message || error);
   }
 
+  return { products: [] };
+}
+
+/**
+ * Homepage "Latest Arrivals": newest products by `createdAt` DESC.
+ * Does NOT require `isNewArrival === true` (that flag controls only the
+ * explicit "New Arrivals" collection/filter). Uses the backend LIST
+ * projection (no `fullData`) because cards never render spec fields.
+ */
+export async function fetchNewestProducts(limit: number = HOMEPAGE_PRODUCT_LIMIT): Promise<Product[]> {
+  try {
+    const { apiServerGet } = await import("@/lib/api");
+    const data = await apiServerGet(
+      `/api/product/allproducts?limit=${limit}&sortBy=newest&page=1`,
+      { cache: 'no-store', revalidate: 0 }
+    );
+    if (data.success && data.products) {
+      return data.products.map(mapProductFromDB);
+    }
+  } catch (error: any) {
+    console.error(`Error fetching newest products:`, error.message || error);
+  }
+  return [];
+}
+
+/**
+ * Client-side paginated/filtered/sorted fetch (search, collection keys).
+ * Mirrors `fetchPaginatedProducts` but uses `apiGet` so client components
+ * never depend on the global provider's first-100 window. Backend does
+ * filtering + `createdAt` ordering + pagination before LIMIT, so
+ * catalogs >100 products still resolve correctly.
+ */
+export async function fetchPaginatedProductsClient(queryParams: Record<string, any> = {}): Promise<FetchProductsResponse> {
+  try {
+    const { apiGet } = await import("@/lib/api");
+    const cleanParams = Object.entries(queryParams)
+      .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+      .reduce((acc, [k, v]) => ({ ...acc, [k]: String(v) }), {});
+    const query = new URLSearchParams(cleanParams).toString();
+    const url = `/api/product/allproducts${query ? `?${query}` : ''}`;
+    const data = await apiGet(url, { cache: 'no-store' });
+    if (data.success && data.products) {
+      return {
+        products: data.products.map(mapProductFromDB),
+        pagination: data.pagination,
+      };
+    }
+  } catch (error: any) {
+    console.error(`Error fetching paginated products (client):`, error.message || error);
+  }
   return { products: [] };
 }
 

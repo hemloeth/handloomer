@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, User, Menu } from "lucide-react"
+import { User, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -11,19 +11,25 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { clearAdminToken } from "@/lib/api"
+import { apiPost, clearAdminToken } from "@/lib/api"
+import { toast } from "sonner"
 
 interface AdminHeaderProps {
     onMenuClick: () => void
-    isCollapsed?: boolean
-    onToggleCollapse?: () => void
 }
 
-export function AdminHeader({ onMenuClick, isCollapsed, onToggleCollapse }: AdminHeaderProps) {
-    const handleLogout = () => {
-        localStorage.removeItem("auth_user")
-        clearAdminToken()
-        window.location.href = "/admin"
+export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
+    // Backend logout first (revokes JWT + clears HttpOnly cookie), then local.
+    const handleLogout = async () => {
+        try {
+            try { await apiPost("/api/user/logout", {}) } catch {}
+            try { sessionStorage.removeItem("handloomer_admin_session_verified") } catch {}
+            localStorage.removeItem("auth_user")
+            clearAdminToken()
+        } finally {
+            toast.info("Signed out")
+            window.location.href = "/admin"
+        }
     }
 
     return (
@@ -33,17 +39,7 @@ export function AdminHeader({ onMenuClick, isCollapsed, onToggleCollapse }: Admi
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Toggle Menu</span>
             </Button>
-            {/* Desktop sidebar collapse/expand trigger */}
-            <Button
-                variant="ghost"
-                size="icon"
-                className="hidden lg:flex -ml-2 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={onToggleCollapse}
-                title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle Sidebar</span>
-            </Button>
+            
             <div className="flex flex-1 items-center gap-4">
                 <Link href="/admin/dashboard" className="flex items-center gap-2 font-semibold">
                     <span className="text-xl font-serif text-primary">The Handloomer</span>
@@ -51,10 +47,6 @@ export function AdminHeader({ onMenuClick, isCollapsed, onToggleCollapse }: Admi
                 </Link>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Bell className="h-4 w-4" />
-                    <span className="sr-only">Notifications</span>
-                </Button>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border bg-muted cursor-pointer">

@@ -9,7 +9,7 @@ import { ProductCard } from "@/components/products/product-card"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { Sparkles, ShoppingBag, Star } from "lucide-react"
-import { categories } from "@/lib/products"
+import { fetchPaginatedProductsClient, categories } from "@/lib/products"
 import { redirect } from "next/navigation"
 import { CategoryProductsClient } from "../../categories/[slug]/category-products-client"
 import { Suspense } from "react"
@@ -56,25 +56,13 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
                     }
                 }
 
-                // Fetch all products and filter by collection key
-                const prodResponse = await apiGet('/api/product/allproducts?limit=100')
-                if (prodResponse.success) {
-                    let filtered = prodResponse.products;
-                    
-                    if (key !== 'new-arrivals') {
-                        filtered = filtered.filter((p: any) =>
-                            p.productCollection === key ||
-                            (key === 'festive' && (p.isFestive || p.productCollection === 'festive')) ||
-                            ((key === 'big-sale' || key === 'sale') && (p.isOnSale || p.productCollection === 'big-sale' || p.productCollection === 'sale' || (p.regularPrice && p.regularPrice > p.price)))
-                        )
-                    }
-                    
-                    if (key === 'new-arrivals') {
-                        filtered.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-                    }
-                    
-                    setProducts(filtered)
-                }
+                // Backend-driven filtering + createdAt ordering (no global-100
+                // then client filter). "New Arrivals" (explicit) = isNewArrival.
+                const query = key === "new-arrivals"
+                    ? { isNewArrival: "true", sortBy: "newest", limit: 100, page: 1 }
+                    : { productCollection: key, sortBy: "newest", limit: 100, page: 1 }
+                const { products: mapped } = await fetchPaginatedProductsClient(query)
+                setProducts(mapped)
             } catch (error) {
                 console.error("Error fetching collection data:", error)
             } finally {
@@ -100,7 +88,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
         return (
             <main className="min-h-screen bg-background">
                 <Header />
-                <div style={{ height: "var(--header-offset, 120px)" }} />
+                <div style={{ height: "var(--header-offset)" }} />
 
                 {/* Skeleton loading — keeps the header and grid layout stable,
                     no full-page "Loading" text flash. */}
@@ -126,7 +114,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
         return (
             <main className="min-h-screen bg-background">
                 <Header />
-                <div style={{ height: "var(--header-offset, 120px)" }} />
+                <div style={{ height: "var(--header-offset)" }} />
                 <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-24 text-center">
                     <h1 className="font-serif text-3xl mb-3">Collection not found</h1>
                     <p className="text-muted-foreground mb-6">We couldn't find the collection you were looking for.</p>
@@ -147,7 +135,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             <Header />
 
             {/* Spacer to clear the fixed header using its live measured height */}
-            <div style={{ height: "var(--header-offset, 120px)" }} />
+            <div style={{ height: "var(--header-offset)" }} />
 
             {/* Collections Sub-nav */}
             {key !== 'new-arrivals' && (
@@ -202,29 +190,8 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
 
             {/* Products Grid */}
             <Suspense fallback={<div className="py-20 text-center">Loading products...</div>}>
-                <CategoryProductsClient 
-                    initialProducts={products.map(product => {
-                        const productName = product.name || 'Unnamed Product';
-                        const productCategory = product.category || 'Collection';
-                        
-                        const galleryUrls = product.galleryImages && Array.isArray(product.galleryImages) 
-                            ? product.galleryImages.map((g: any) => g.url).filter(Boolean) 
-                            : [];
-                        
-                        return {
-                            id: product._id,
-                            name: productName,
-                            slug: product.slug || productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-                            price: product.price || 0,
-                            originalPrice: product.regularPrice || product.price || 0,
-                            image: product.mainImage || galleryUrls[0] || '',
-                            images: galleryUrls.length > 0 ? galleryUrls : (product.mainImage ? [product.mainImage] : []),
-                            isOnSale: product.isOnSale || false,
-                            isNew: product.isNewArrival || false,
-                            category: productCategory,
-                            categorySlug: productCategory.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
-                        }
-                    }) as any}
+                <CategoryProductsClient
+                    initialProducts={products}
                     pageTitle={collection.name}
                 />
             </Suspense>

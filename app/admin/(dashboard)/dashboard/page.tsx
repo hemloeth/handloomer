@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import { StatsCard } from "@/components/admin/stats-card"
 import { DollarSign, ShoppingBag, Package, Users, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
 import {
@@ -39,6 +40,8 @@ export default function AdminDashboard() {
     const [salesData, setSalesData] = useState<any[]>([])
     const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [refreshFailed, setRefreshFailed] = useState(false)
 
     useEffect(() => {
         fetchDashboardData()
@@ -47,19 +50,23 @@ export default function AdminDashboard() {
     const fetchDashboardData = async () => {
         try {
             const { apiGet } = await import("@/lib/api")
-
             const [statsRes, revenueRes, salesRes, ordersRes] = await Promise.all([
                 apiGet("/api/admin/stats"),
                 apiGet("/api/admin/revenue-chart"),
                 apiGet("/api/admin/sales-chart"),
                 apiGet("/api/admin/recent-orders"),
             ])
-
-            if (statsRes.success) setStats(statsRes.stats)
+            if (!statsRes.success) throw new Error("Dashboard stats unavailable")
+            setStats(statsRes.stats)
+            setError(null)
+            setRefreshFailed(false)
             if (revenueRes.success) setRevenueData(revenueRes.chartData)
             if (salesRes.success) setSalesData(salesRes.chartData)
             if (ordersRes.success) setRecentOrders(ordersRes.orders)
-        } catch (err) {
+        } catch (err: any) {
+            const msg = err?.message || "Failed to load dashboard"
+            if (stats === null) setError(msg)
+            else setRefreshFailed(true)
             console.error("Failed to load dashboard:", err)
         } finally {
             setLoading(false)
@@ -92,10 +99,21 @@ export default function AdminDashboard() {
         )
     }
 
+    if (error && stats === null) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
+                <p>Unable to load dashboard data.</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+                <Button onClick={() => { setLoading(true); setError(null); fetchDashboardData() }}>Retry</Button>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight text-primary font-serif">Dashboard</h2>
+                {refreshFailed && <p className="text-xs text-amber-600 mt-1">Refresh failed — showing last known values.</p>}
                 <p className="text-muted-foreground">
                     Overview of your store&apos;s performance.
                 </p>

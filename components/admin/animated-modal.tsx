@@ -1,6 +1,6 @@
 "use client"
 
-import { ReactNode } from "react"
+import React, { ReactNode } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface AnimatedModalProps {
@@ -11,6 +11,18 @@ interface AnimatedModalProps {
 }
 
 export function AnimatedModal({ isOpen, onClose, children, disableClose = false }: AnimatedModalProps) {
+    // Escape to close + initial focus (modal owns focus while open).
+    const ref = React.useRef<HTMLDivElement | null>(null)
+    React.useEffect(() => {
+        if (!isOpen || disableClose) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose?.() }
+        document.addEventListener("keydown", onKey)
+        const prev = document.activeElement as HTMLElement | null
+        const timer = setTimeout(() => {
+            ref.current?.querySelector<HTMLElement>("button, a, input, [tabindex]")?.focus()
+        }, 0)
+        return () => { document.removeEventListener("keydown", onKey); clearTimeout(timer); prev?.focus?.() }
+    }, [isOpen, onClose, disableClose])
     return (
         <AnimatePresence>
             {isOpen && (
@@ -39,7 +51,7 @@ export function AnimatedModal({ isOpen, onClose, children, disableClose = false 
                             }}
                             className="w-full max-w-sm pointer-events-auto"
                         >
-                            <div className="bg-background rounded-2xl border shadow-2xl p-6 drop-shadow-xl">
+                            <div className="bg-background rounded-2xl border shadow-2xl p-6 drop-shadow-xl" role="dialog" aria-modal="true" ref={ref}>
                                 {children}
                             </div>
                         </motion.div>

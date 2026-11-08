@@ -54,7 +54,7 @@ export default function ContactPage() {
 
       <main
         className="flex-1 max-w-[1300px] w-full mx-auto px-6 sm:px-10 lg:px-16 py-12 lg:py-16"
-        style={{ paddingTop: 'calc(var(--header-offset, 140px) + 2rem)' }}
+        style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
       >
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-20 items-start">
           

@@ -1183,7 +1183,7 @@ export default function CheckoutPage() {
         <Header />
         <div 
           className="min-h-[80vh] flex items-center justify-center px-4 md:px-8"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="animate-pulse text-muted-foreground">Loading checkout...</div>
         </div>
@@ -1198,7 +1198,7 @@ export default function CheckoutPage() {
         <Header />
         <div 
           className="min-h-[80vh] flex items-center justify-center px-4 md:px-8"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center px-4">
             <h1 className="font-serif text-3xl mb-4">Your cart is empty</h1>
@@ -1222,7 +1222,7 @@ export default function CheckoutPage() {
         <Header />
         <div 
           className="flex-1 flex items-center justify-center px-4 md:px-8 pb-16"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center px-6 py-12 max-w-md w-full bg-card rounded-2xl border border-primary/20 shadow-xl animate-in fade-in zoom-in-95 duration-300">
             <div className="relative w-20 h-20 mx-auto mb-6 flex items-center justify-center">
@@ -1294,7 +1294,7 @@ export default function CheckoutPage() {
         <Header />
         <div 
           className="flex-1 flex items-center justify-center px-4 md:px-8 pb-16"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center px-6 py-10 max-w-md w-full bg-card rounded-2xl border border-border/80 shadow-md animate-in fade-in zoom-in-95 duration-500">
             <div className="w-20 h-20 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -1355,7 +1355,7 @@ export default function CheckoutPage() {
         <Header />
         <div
           className="flex-1 flex items-center justify-center px-4 md:px-8 pb-16"
-          style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}
+          style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
         >
           <div className="text-center px-4 max-w-md">
             <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1469,7 +1469,7 @@ export default function CheckoutPage() {
     <main className="min-h-screen bg-background">
       <Header />
 
-      <div style={{ paddingTop: 'calc(var(--header-offset, 120px) + 2rem)' }}>
+      <div style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}>
         <section className="pb-8 lg:pb-12 px-4 md:px-8 lg:px-12 xl:px-16">
           <div className="max-w-[1200px] mx-auto">
             {/* Back Link */}

@@ -63,12 +63,12 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
     const deleteCategory = async (id: string) => {
         setLoading(true)
         setError(null)
-
         try {
             await apiDelete(`/api/category/${id}`)
             setCategories((prev) => prev.filter((cat) => cat._id !== id))
         } catch (err: any) {
             setError(err.message || "Something went wrong")
+            throw err
         } finally {
             setLoading(false)
         }

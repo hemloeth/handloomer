@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from "react"
 import { usePathname } from 'next/navigation'
 import {
     type Product as FrontendProduct,
@@ -16,6 +16,7 @@ import {
     getPriceRange,
     filterProducts,
     sortProducts,
+    PRODUCT_STALE_TIME_MS,
     searchProducts
 } from "@/lib/products"
 import { apiGet, apiUpload, apiDelete, apiPut, apiPatch } from "@/lib/api"
@@ -70,6 +71,7 @@ interface ProductContextType {
     deleteMultipleProducts: (ids: string[]) => Promise<number>
     updateGalleryImageInfo: (productId: string, imageIndex: number, info: Partial<ImageInfo>) => Promise<void>
     loading: boolean
+    isRefreshing: boolean
     error: string | null
 
     // Frontend Mapped Products & Helpers
@@ -93,53 +95,89 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     const [products, setProducts] = useState<Product[]>([])
     const [ssrProducts, setSsrProducts] = useState<FrontendProduct[]>(initialProducts)
     const [loading, setLoading] = useState(false)
+    const [isRefreshing, setIsRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const pathname = usePathname()
     const isAdminArea = pathname?.startsWith("/admin") ?? false
 
-    const fetchProducts = useCallback(async () => {
-        try {
-            const data = await apiGet('/api/product/allproducts?limit=100&fullData=true', { cache: 'no-store' })
-            if (data?.products) {
-                setProducts(data.products)
-            }
-        } catch (err) {
-            console.error("Failed to fetch products", err)
-            setError(err instanceof Error ? err.message : "Failed to fetch products")
+    // Stale-time + race/dedupe guards. Backend stays no-store; stale-time
+    // only gates whether a network request is sent. Background refreshes
+    // never clear `products` (list stays visible); a failed refresh keeps
+    // valid catalog + logs (error surfaced, no UI wipe).
+    const lastFetchedAtRef = useRef<number>(initialProducts.length > 0 ? Date.now() : 0)
+    const generationRef = useRef(0)
+    const inflightRef = useRef<Promise<void> | null>(null)
+
+    const fetchProducts = useCallback(async (options?: { force?: boolean }) => {
+        const force = options?.force ?? false
+        // Dedupe simultaneous triggers (focus + visibility + route).
+        if (inflightRef.current) return inflightRef.current
+        // Skip when data is fresh (SSR seed counts as fresh at mount).
+        if (!force && Date.now() - lastFetchedAtRef.current < PRODUCT_STALE_TIME_MS) {
+            return
         }
+        const generation = ++generationRef.current
+        // Background refresh: keep list visible, only flag refreshing.
+        const isBackground = products.length > 0 || ssrProducts.length > 0
+        if (isBackground) setIsRefreshing(true)
+        const run = (async () => {
+            try {
+                const data = await apiGet('/api/product/allproducts?limit=100&fullData=true', { cache: 'no-store' })
+                // Only latest fetch may update state (slow A cannot beat fast B).
+                if (generation !== generationRef.current) return
+                if (data?.products) {
+                    setProducts(data.products)
+                    lastFetchedAtRef.current = Date.now()
+                }
+            } catch (err) {
+                if (generation !== generationRef.current) return
+                console.error("Failed to fetch products", err)
+                setError(err instanceof Error ? err.message : "Failed to fetch products")
+            } finally {
+                if (generation === generationRef.current) {
+                    inflightRef.current = null
+                    setIsRefreshing(false)
+                }
+            }
+        })()
+        inflightRef.current = run
+        return run
     }, [])
 
-    // Real-time synchronization:
-    // 1. Initial background fetch to get fresh live stock numbers from DB.
-    // 2. Window focus & tab visibility listeners so returning to tab updates stock instantly.
-    // 3. Periodic polling in admin panel (every 20s) so new orders reflect immediately.
+    // Initial sync (only when no fresh SSR seed), focus/visibility re-sync
+    // when stale, admin polling (forced, 20s), and route-entry freshness.
     useEffect(() => {
-        fetchProducts()
-
-        const handleFocus = () => {
-            fetchProducts()
+        if (lastFetchedAtRef.current === 0) {
+            void fetchProducts()
         }
-
+        const handleFocus = () => {
+            void fetchProducts()
+        }
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") {
-                fetchProducts()
+                void fetchProducts()
             }
         }
-
         window.addEventListener("focus", handleFocus)
         document.addEventListener("visibilitychange", handleVisibilityChange)
-
         let intervalId: NodeJS.Timeout | null = null
         if (isAdminArea) {
-            intervalId = setInterval(fetchProducts, 20000)
+            intervalId = setInterval(() => { void fetchProducts({ force: true }) }, 20000)
         }
-
         return () => {
             window.removeEventListener("focus", handleFocus)
             document.removeEventListener("visibilitychange", handleVisibilityChange)
             if (intervalId) clearInterval(intervalId)
+            // Discard in-flight result after unmount.
+            generationRef.current++
         }
     }, [isAdminArea, fetchProducts])
+
+    // Returning to a catalog route with stale provider data refreshes.
+    // Shared with focus/visibility via stale-time + inflight guards.
+    useEffect(() => {
+        void fetchProducts()
+    }, [pathname, fetchProducts])
 
     const addProduct = async (formData: FormData): Promise<Product | null> => {
         setLoading(true)
@@ -148,6 +186,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         try {
             const data = await apiUpload('/api/product/add-product', formData, 'POST')
             setProducts((prev) => [data.product, ...prev])
+            lastFetchedAtRef.current = Date.now()
             return data.product
         } catch (err: any) {
             setError(err.message || "Something went wrong")
@@ -158,19 +197,13 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     }
 
     const uploadVideo = async (productId: string, videoFile: File) => {
-        try {
-            const videoForm = new FormData()
-            videoForm.append("videoFile", videoFile)
-
-            const data = await apiUpload(`/api/product/upload-video/${productId}`, videoForm, 'PUT')
-
-            // Update the product in state with video URL
-            setProducts((prev) =>
-                prev.map((p) => (p._id === productId ? data.product : p))
-            )
-        } catch (err: any) {
-            console.error("Video upload failed", err)
-        }
+        const videoForm = new FormData()
+        videoForm.append("videoFile", videoFile)
+        const data = await apiUpload(`/api/product/upload-video/${productId}`, videoForm, 'PUT')
+        // Update the product in state with video URL
+        setProducts((prev) =>
+            prev.map((p) => (p._id === productId ? data.product : p))
+        )
     }
 
     const updateProduct = async (id: string, formData: FormData): Promise<Product | null> => {
@@ -183,6 +216,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
             setProducts((prev) =>
                 prev.map((p) => (p._id === id ? data.product : p))
             )
+            lastFetchedAtRef.current = Date.now()
             return data.product
         } catch (err: any) {
             setError(err.message || "Something went wrong")
@@ -207,12 +241,13 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     const deleteProduct = async (id: string) => {
         setLoading(true)
         setError(null)
-
         try {
             await apiDelete(`/api/product/${id}`)
             setProducts((prev) => prev.filter((p) => p._id !== id))
+            lastFetchedAtRef.current = Date.now()
         } catch (err: any) {
             setError(err.message || "Something went wrong")
+            throw err
         } finally {
             setLoading(false)
         }
@@ -237,15 +272,10 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     }
 
     const updateGalleryImageInfo = async (productId: string, imageIndex: number, info: Partial<ImageInfo>) => {
-        try {
-            const data = await apiPut(`/api/product/${productId}/gallery-image-info`, { imageIndex, ...info })
-
-            setProducts((prev) =>
-                prev.map((p) => (p._id === productId ? data.product : p))
-            )
-        } catch (err: any) {
-            console.error("Image info update failed", err)
-        }
+        const data = await apiPut(`/api/product/${productId}/gallery-image-info`, { imageIndex, ...info })
+        setProducts((prev) =>
+            prev.map((p) => (p._id === productId ? data.product : p))
+        )
     }
 
     // Map the raw DB products to the frontend expected format
@@ -313,6 +343,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
                 deleteMultipleProducts,
                 updateGalleryImageInfo,
                 loading,
+                isRefreshing,
                 error,
 
                 // Frontend Helpers

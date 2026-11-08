@@ -509,7 +509,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       <Header />
 
       {/* Hero Banner with Auto-Scroll */}
-      <div className="mt-[96px] lg:mt-[104px]">
+      <div style={{ marginTop: "var(--header-offset)" }}>
         <PageHeroSlider
           slides={productCollectionSlides}
           height="40vh"

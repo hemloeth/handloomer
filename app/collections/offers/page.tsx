@@ -39,7 +39,7 @@ export default async function OffersCollectionPage({ searchParams }: OffersPageP
       <Header />
 
       {/* Spacer to clear the fixed header using its live measured height */}
-      <div style={{ height: "var(--header-offset, 120px)" }} />
+      <div style={{ height: "var(--header-offset)" }} />
 
       {/* Collections Sub-nav */}
       <section className="bg-secondary border-b border-border py-8">
