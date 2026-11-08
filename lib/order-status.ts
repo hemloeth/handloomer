@@ -371,3 +371,281 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
   }
 }
 
+/**
+ * Determine whether refund UI should be shown to customer.
+ * Allowed ONLY for genuine refund lifecycle states. Never shown for normal paid orders.
+ */
+export function shouldShowRefund(order: any): boolean {
+  if (!order) return false;
+
+  const paymentMethod = (order.payment?.method || '').toLowerCase();
+  if (paymentMethod === 'cod') return false; // COD never requires monetary refund
+
+  const refundStatus = (order.refundSummary?.status || order.refund?.status || '').toLowerCase();
+  const paymentStatus = (order.payment?.status || '').toLowerCase();
+  const isCancelled =
+    order.status === 'cancelled' ||
+    order.cancellation?.status === 'completed' ||
+    order.cancellationSummary?.status === 'completed';
+  const isPaid = paymentStatus === 'paid' || paymentStatus === 'refunded' || Number(order.payment?.amountPaid || 0) > 0;
+
+  // Genuine refund statuses
+  const hasValidRefundStatus = ['requested', 'pending', 'processed', 'failed'].includes(refundStatus);
+  const isPaymentMarkedRefunded = paymentStatus === 'refunded' || Number(order.payment?.refundedAmount || 0) > 0;
+  const isCancelledPaidPrepaid = isCancelled && isPaid;
+
+  if (!hasValidRefundStatus && !isPaymentMarkedRefunded && !isCancelledPaidPrepaid) {
+    return false;
+  }
+
+  // Must have a positive refund amount
+  const amountRupees = Number(
+    order.refundSummary?.amountRupees ??
+    (order.refund?.amountPaise ? order.refund.amountPaise / 100 : undefined) ??
+    (order.payment?.refundedAmount ? order.payment.refundedAmount / 100 : undefined) ??
+    (isCancelledPaidPrepaid ? order.pricing?.total : 0)
+  );
+
+  return amountRupees > 0;
+}
+
+export interface CustomerRefundDisplay {
+  shouldShow: boolean;
+  status: 'requested' | 'pending' | 'processed' | 'failed';
+  badgeLabel: string;
+  badgeClass: string;
+  title: string;
+  amountRupees: number;
+  formattedAmount: string;
+  paymentMethodDisplay: string;
+  notice: string;
+  verifiedAtDate?: string | null;
+}
+
+/**
+ * Resolve transparent customer-facing refund details
+ */
+export function resolveRefundDisplay(order: any): CustomerRefundDisplay | null {
+  if (!shouldShowRefund(order)) return null;
+
+  const rawStatus = (order.refundSummary?.status || order.refund?.status || '').toLowerCase();
+  const paymentStatus = (order.payment?.status || '').toLowerCase();
+
+  let status: 'requested' | 'pending' | 'processed' | 'failed' = 'pending';
+  if (rawStatus === 'processed' || paymentStatus === 'refunded') {
+    status = 'processed';
+  } else if (rawStatus === 'failed') {
+    status = 'failed';
+  } else if (rawStatus === 'requested') {
+    status = 'requested';
+  } else {
+    status = 'pending';
+  }
+
+  const amountRupees = Number(
+    order.refundSummary?.amountRupees ??
+    (order.refund?.amountPaise ? order.refund.amountPaise / 100 : undefined) ??
+    (order.payment?.refundedAmount ? order.payment.refundedAmount / 100 : undefined) ??
+    order.pricing?.total ?? 0
+  );
+
+  const formattedAmount = amountRupees.toLocaleString('en-IN', {
+    minimumFractionDigits: amountRupees % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+
+  const paymentMethod = resolvePaymentMethodName(order.payment?.method);
+
+  let badgeLabel = 'Refund Processing';
+  let badgeClass = 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-800';
+  let title = 'Refund Processing';
+  let notice = `₹${formattedAmount} will be returned to your original payment method (${paymentMethod}). It typically reflects within 5-7 business days.`;
+
+  if (status === 'processed') {
+    badgeLabel = 'Refund Processed';
+    badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:border-emerald-800';
+    title = 'Refund Processed';
+    notice = `₹${formattedAmount} has been refunded to your ${paymentMethod}. Bank credit reflects within 5-7 business days.`;
+  } else if (status === 'failed') {
+    badgeLabel = 'Refund Requires Attention';
+    badgeClass = 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950/70 dark:text-red-200 dark:border-red-800';
+    title = 'Refund Requires Attention';
+    notice = `We are reviewing your refund of ₹${formattedAmount}. Our support team will assist you shortly.`;
+  } else if (status === 'requested') {
+    badgeLabel = 'Refund Requested';
+    badgeClass = 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/70 dark:text-blue-200 dark:border-blue-800';
+    title = 'Refund Requested';
+    notice = `Your refund request of ₹${formattedAmount} has been received and is being initiated.`;
+  }
+
+  const verifiedAt = order.refundSummary?.verifiedAt || order.refund?.verifiedAt;
+  const verifiedAtDate = verifiedAt
+    ? new Date(verifiedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  return {
+    shouldShow: true,
+    status,
+    badgeLabel,
+    badgeClass,
+    title,
+    amountRupees,
+    formattedAmount,
+    paymentMethodDisplay: paymentMethod,
+    notice,
+    verifiedAtDate,
+  };
+}
+
+export function resolvePaymentMethodName(method?: string): string {
+  const m = (method || '').toLowerCase();
+  if (m === 'cod') return 'Cash on Delivery';
+  if (m === 'upi') return 'UPI';
+  if (m === 'card') return 'Card';
+  if (m === 'netbanking') return 'NetBanking';
+  if (m === 'wallet') return 'Wallet';
+  if (m === 'coupon') return 'Gift Coupon';
+  return 'Online Payment';
+}
+
+export interface CustomerPaymentDisplay {
+  methodName: string;
+  statusLabel: string;
+  combinedDisplay: string;
+  isPaid: boolean;
+  isCod: boolean;
+  isPending: boolean;
+  isZeroPayable: boolean;
+}
+
+export function resolvePaymentDisplay(order: any): CustomerPaymentDisplay {
+  const isCod = (order?.payment?.method || '').toLowerCase() === 'cod';
+  const methodName = resolvePaymentMethodName(order?.payment?.method);
+  const paymentStatus = (order?.payment?.status || '').toLowerCase();
+
+  const isZeroPayable =
+    order?.isZeroPayable === true ||
+    (order?.pricing?.total !== undefined &&
+      order?.pricing?.total !== null &&
+      Number(order.pricing.total) === 0 &&
+      !isCod);
+
+  if (isZeroPayable) {
+    return {
+      methodName: 'Coupon / Free',
+      statusLabel: 'No Payment Due',
+      combinedDisplay: 'No Payment Due',
+      isPaid: true,
+      isCod: false,
+      isPending: false,
+      isZeroPayable: true,
+    };
+  }
+
+  if (isCod) {
+    return {
+      methodName,
+      statusLabel: 'Pay on Delivery',
+      combinedDisplay: 'Cash on Delivery • Pay on Delivery',
+      isPaid: false,
+      isCod: true,
+      isPending: false,
+      isZeroPayable: false,
+    };
+  }
+
+  const isPaid = paymentStatus === 'paid' || paymentStatus === 'refunded';
+  const isPending = paymentStatus === 'pending' || !paymentStatus;
+
+  const statusLabel = isPaid ? 'Paid' : isPending ? 'Pending' : 'Failed';
+  const combinedDisplay = `${methodName} • ${statusLabel}`;
+
+  return {
+    methodName,
+    statusLabel,
+    combinedDisplay,
+    isPaid,
+    isCod: false,
+    isPending,
+    isZeroPayable: false,
+  };
+}
+
+export interface ProductPreviewItem {
+  name: string;
+  image?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface ProductPreviewResult {
+  previews: ProductPreviewItem[];
+  remainingCount: number;
+  totalQuantity: number;
+}
+
+export function resolveProductPreviews(items: any[] | undefined | null): ProductPreviewResult {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { previews: [], remainingCount: 0, totalQuantity: 0 };
+  }
+
+  const allItems: ProductPreviewItem[] = items.map((item) => {
+    const name = item.productName || item.productId?.name || item.name || 'Handcrafted Saree';
+    const image = item.productImage || item.productId?.mainImage || item.image || '/placeholder.svg';
+    const quantity = Number(item.quantity || 1);
+    const unitPrice = Number(item.price || 0);
+    const lineTotal = unitPrice * quantity;
+    return { name, image, quantity, unitPrice, lineTotal };
+  });
+
+  const totalQuantity = allItems.reduce((acc, curr) => acc + curr.quantity, 0);
+
+  // Show up to 2 previews; if more than 2, show 1 and "+ N more items" to keep cards compact
+  const maxPreviews = allItems.length > 2 ? 1 : allItems.length;
+  const previews = allItems.slice(0, maxPreviews);
+  const remainingCount = allItems.length - previews.length;
+
+  return { previews, remainingCount, totalQuantity };
+}
+
+export interface CustomerOrderActions {
+  canViewDetails: boolean;
+  canTrack: boolean;
+  canCancel: boolean;
+  canResumePayment: boolean;
+  canCheckStatus: boolean;
+  cannotCancelReason?: string | null;
+  cannotResumeReason?: string | null;
+}
+
+export function resolveOrderActions(order: any): CustomerOrderActions {
+  const status = resolveCustomerOrderStatus(order);
+
+  const canResumePayment = Boolean(status.canResumePayment && (order?.canResumePayment ?? true));
+  const canCheckStatus = Boolean(status.isPendingPayment);
+
+  // Track order: only useful if placed, confirmed, shipped, out_for_delivery, delivered
+  const trackableKeys = ['order_placed', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
+  const canTrack = trackableKeys.includes(status.key) && !status.isPendingPayment;
+
+  // Cancel order: only if canCancel is true, not shipped/delivered/cancelled/pending payment
+  const canCancel = Boolean(
+    status.canCancel &&
+    (order?.canCancel ?? true) &&
+    !status.isPendingPayment &&
+    !status.isTerminal &&
+    !['shipped', 'out_for_delivery', 'delivered', 'returned'].includes(status.key)
+  );
+
+  return {
+    canViewDetails: true,
+    canTrack,
+    canCancel,
+    canResumePayment,
+    canCheckStatus,
+    cannotCancelReason: order?.cannotCancelReason || null,
+    cannotResumeReason: order?.cannotResumeReason || null,
+  };
+}
+

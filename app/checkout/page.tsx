@@ -22,6 +22,7 @@ import {
   resolveAttempt,
 } from "@/lib/checkout-attempt"
 import { resolveCheckoutOutcome } from "@/lib/checkout-outcomes"
+import { resolvePaymentDisplay } from "@/lib/order-status"
 import { PreparingRetryManager, type CheckoutOperationIdentity, type ModalSession } from "@/lib/preparing-retry"
 import { openRazorpayModal, loadRazorpayScript, clearCheckoutLoadingStates as clearCheckoutLoadingStatesHelper } from "@/lib/razorpay-modal"
 import { Check, CreditCard, Truck, ShieldCheck, ArrowLeft, Tag, X, ChevronDown, Search, Loader2, Wallet, Smartphone } from "lucide-react"
@@ -291,16 +292,31 @@ export default function CheckoutPage() {
   const [placedOrderId, setPlacedOrderId] = useState("")
   const [authoritativeOrder, setAuthoritativeOrder] = useState<any>(null)
 
-  // Fetch authoritative server order details upon order completion
+  // Fetch authoritative server order details upon order completion if not already provided
   useEffect(() => {
-    if (orderPlaced && placedOrderId) {
+    if (orderPlaced && placedOrderId && !authoritativeOrder) {
       let active = true;
       (async () => {
         try {
-          const { apiGet } = await import("@/lib/api");
-          const res = await apiGet(`/api/order/track?orderId=${encodeURIComponent(placedOrderId)}`);
-          if (active && res && res.success && res.order) {
-            setAuthoritativeOrder(res.order);
+          const { apiGet, apiPost } = await import("@/lib/api");
+          // If authenticated, fetch via user order endpoint
+          if (isAuthenticated) {
+            const res = await apiGet(`/api/order/${encodeURIComponent(placedOrderId)}`);
+            if (active && res && res.success && res.order) {
+              setAuthoritativeOrder(res.order);
+              return;
+            }
+          }
+          // For guests or unauthenticated context, track securely via orderId + email
+          const customerEmail = formData.email || (user as any)?.email;
+          if (customerEmail) {
+            const res = await apiPost('/api/order/track-public', {
+              orderId: placedOrderId,
+              email: customerEmail,
+            });
+            if (active && res && res.success && res.order) {
+              setAuthoritativeOrder(res.order);
+            }
           }
         } catch (e) {
           // Keep form fallback if query fails
@@ -308,7 +324,7 @@ export default function CheckoutPage() {
       })();
       return () => { active = false; };
     }
-  }, [orderPlaced, placedOrderId])
+  }, [orderPlaced, placedOrderId, authoritativeOrder, isAuthenticated, formData.email, user])
   const [paymentPending, setPaymentPending] = useState(false)
   const [pendingOrderId, setPendingOrderId] = useState("")
 
@@ -350,13 +366,14 @@ export default function CheckoutPage() {
     retryManagerRef.current.invalidateAll()
   }, [scope])
 
-  const finalizeSuccess = (orderId: string, purchased?: Array<{ productId: string; quantity: number }>) => {
+  const finalizeSuccess = (orderId: string, purchased?: Array<{ productId: string; quantity: number }>, orderData?: any) => {
     if (!retryManagerRef.current.deduplicateSuccess(orderId)) return
     retryManagerRef.current.reset()
     const linesToSettle = purchased || pendingOrder?.purchasedLines || loadAttempt(scope)?.purchasedLines
     clearAttempt(scope)
     setPendingOrder(null)
     if (linesToSettle) removePurchasedItems(linesToSettle)
+    if (orderData) setAuthoritativeOrder(orderData)
     setPlacedOrderId(orderId)
     setIsVerifyingPayment(false)
     setOrderPlaced(true)
@@ -542,7 +559,7 @@ export default function CheckoutPage() {
         return
       }
       case "success": {
-        finalizeSuccess(orderId!, purchasedLines)
+        finalizeSuccess(orderId!, purchasedLines, resp?.order)
         return
       }
       case "unknown":
@@ -733,8 +750,20 @@ export default function CheckoutPage() {
           }
           const tokenNow = params.token || loadAttempt(scope)?.checkoutToken || loadAttempt(scope)?.recoverySecret
           if (tokenNow) body.checkoutToken = tokenNow
-          const verifyData = await apiPost('/api/order/verify-payment', body)
+
+          // Enforce minimum display time (800ms) for the verification loader so the customer sees
+          // "Confirming Your Payment" without any jarring flicker or flash of the checkout form
+          const [verifyData] = await Promise.all([
+            apiPost('/api/order/verify-payment', body),
+            new Promise((resolve) => setTimeout(resolve, 800)),
+          ])
+
           if (!retryManagerRef.current.isOperationValid(verifyOp)) return
+
+          if (verifyData?.order) {
+            setAuthoritativeOrder(verifyData.order)
+          }
+
           await applyResolvedOutcome(verifyData, {
             orderId: params.orderId,
             token: params.token,
@@ -1224,7 +1253,25 @@ export default function CheckoutPage() {
 
   if (orderPlaced) {
     const isCod = (authoritativeOrder?.payment?.method || formData.paymentMethod) === "cod"
-    const isZeroPayable = authoritativeOrder?.pricing?.total === 0 || (!isCod && Number(authoritativeOrder?.pricing?.total ?? 0) === 0)
+
+    // CRITICAL FIX (ISSUE 4): Missing data MUST NOT mean zero!
+    // Zero-payable is true ONLY when the backend explicitly supplied a valid zero total or isZeroPayable flag.
+    const hasAuthoritativeTotal =
+      authoritativeOrder?.pricing?.total !== undefined &&
+      authoritativeOrder?.pricing?.total !== null
+
+    const isZeroPayable =
+      authoritativeOrder?.isZeroPayable === true ||
+      (hasAuthoritativeTotal && !isCod && Number(authoritativeOrder.pricing.total) === 0)
+
+    const paymentDisplay = resolvePaymentDisplay(
+      authoritativeOrder || {
+        payment: { method: formData.paymentMethod, status: isCod ? "pending" : "paid" },
+        pricing: { total: hasAuthoritativeTotal ? Number(authoritativeOrder.pricing.total) : undefined },
+        isZeroPayable,
+      }
+    )
+
     const successBadge = isCod
       ? "Order Placed — Pay on Delivery"
       : isZeroPayable
@@ -1237,10 +1284,10 @@ export default function CheckoutPage() {
       ? "Your order has been confirmed without any payment charge. A confirmation email has been queued to"
       : "Your payment was confirmed and your order has been placed successfully. A confirmation email has been queued to"
     const paymentMethodDisplay = isCod
-      ? "Cash on Delivery (Pending upon Delivery)"
+      ? "Cash on Delivery"
       : isZeroPayable
       ? "Settled (Fully covered by coupon)"
-      : "Paid Online (Razorpay)"
+      : paymentDisplay.combinedDisplay
 
     return (
       <main className="min-h-screen flex flex-col">

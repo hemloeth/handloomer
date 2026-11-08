@@ -289,6 +289,10 @@ export async function openRazorpayModal(params: OpenRazorpayModalParams): Promis
         const verifyOp = retryManager.startVerificationFromModal(modalSession!)
         if (!verifyOp) return // duplicate callback deduplicated
         try {
+          // Immediately close the Razorpay modal so the full-screen verification loader is visible
+          try {
+            paymentObject?.close?.()
+          } catch {}
           await onVerify(response, verifyOp)
         } finally {
           settleOnce()

@@ -32,7 +32,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { resolveCustomerOrderStatus } from "@/lib/order-status"
+import {
+  resolveCustomerOrderStatus,
+  shouldShowRefund,
+  resolveRefundDisplay,
+  resolvePaymentDisplay,
+  resolveOrderActions,
+  resolveProductPreviews,
+} from "@/lib/order-status"
 
 interface OrderItem {
   name: string
@@ -123,6 +130,7 @@ export default function OrdersPage() {
 
   // Cancellation Modal & Per-order action states
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null)
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null)
   const [selectedReason, setSelectedReason] = useState(CANCELLATION_REASONS[0])
   const [optionalDetails, setOptionalDetails] = useState("")
   const [cancellingIds, setCancellingIds] = useState<Record<string, boolean>>({})
@@ -547,86 +555,122 @@ export default function OrdersPage() {
         )}
 
         {/* Order Cards List */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           {filteredOrders.map((order) => {
             const isCancelling = !!cancellingIds[order._id]
             const isResuming = !!resumingIds[order._id]
             const isRefreshing = !!refreshingIds[order._id]
             const orderError = cancelErrors[order._id]
 
-            // Authoritative status and eligibility resolved by order-status service
+            // Authoritative presentation state resolved from centralized helpers
             const orderStatus = resolveCustomerOrderStatus(order)
-            const canCancelOrder = orderStatus.canCancel
+            const paymentDisplay = resolvePaymentDisplay(order)
+            const refundDisplay = resolveRefundDisplay(order)
+            const actions = resolveOrderActions(order)
+            const productInfo = resolveProductPreviews(order.items)
 
             const isCancellationRequested = order.cancellationSummary?.status === "requested"
-            const isCourierUncertain = isCancellationRequested && order.cancellationSummary?.courierOutcome === "uncertain"
-            const isCourierRejected = order.cancellationSummary?.courierOutcome === "failed"
 
             return (
-              <div key={order._id} className="bg-card rounded-xl shadow-sm border border-border overflow-hidden transition-all hover:shadow-md">
-                {/* Header */}
-                <div className="bg-secondary/60 px-6 py-4 border-b border-border">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div className="flex items-center space-x-3">
-                      {renderStatusIcon(orderStatus.iconName)}
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${orderStatus.badgeColor}`}>
-                        {orderStatus.label}
+              <div
+                key={order._id}
+                className="bg-card rounded-2xl shadow-sm border border-border/80 overflow-hidden transition-all duration-200 hover:shadow-md hover:border-primary/30"
+              >
+                {/* 1. Header */}
+                <div className="bg-secondary/40 px-5 sm:px-6 py-3.5 sm:py-4 border-b border-border/60">
+                  {/* Desktop Header */}
+                  <div className="hidden sm:flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-base text-foreground tracking-tight">
+                        Order #{order.orderId}
                       </span>
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground font-semibold">
-                          Order #{order.orderId}
-                        </span>
-                        {order.payment?.method && (
-                          <span className="text-xs text-muted-foreground">
-                            {getPaymentMethodDisplay(order.payment.method)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 self-end md:self-auto">
-                      <span className="text-xs text-muted-foreground">
-                        Placed on {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                          year: 'numeric',
+                      <span className="text-muted-foreground/40">•</span>
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
                           month: 'short',
-                          day: 'numeric'
+                          year: 'numeric',
                         })}
                       </span>
+                    </div>
 
-                      {/* Quick refresh action for pending, reviewing, or uncertain states */}
-                      {(orderStatus.isPendingPayment || isCancellationRequested || order.refundSummary?.status === "pending" || orderStatus.key === "under_review") && (
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase ${orderStatus.badgeColor}`}
+                      >
+                        {renderStatusIcon(orderStatus.iconName)}
+                        <span>{orderStatus.label}</span>
+                      </span>
+
+                      {(orderStatus.isPendingPayment || isCancellationRequested || refundDisplay?.status === "pending" || orderStatus.key === "under_review") && (
                         <Button
                           variant="ghost"
                           size="xs"
                           onClick={() => refreshSingleOrder(order._id)}
                           disabled={isRefreshing}
                           title="Refresh current status"
-                          className="text-xs gap-1 h-7 text-muted-foreground hover:text-foreground"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                          <span className="hidden sm:inline">Refresh</span>
                         </Button>
                       )}
                     </div>
                   </div>
+
+                  {/* Mobile Header: Stacks intentionally */}
+                  <div className="sm:hidden flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide uppercase ${orderStatus.badgeColor}`}
+                      >
+                        {renderStatusIcon(orderStatus.iconName)}
+                        <span>{orderStatus.label}</span>
+                      </span>
+
+                      {(orderStatus.isPendingPayment || isCancellationRequested || refundDisplay?.status === "pending" || orderStatus.key === "under_review") && (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => refreshSingleOrder(order._id)}
+                          disabled={isRefreshing}
+                          className="h-6 text-[11px] text-muted-foreground p-0 gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
+                          <span>Refresh</span>
+                        </Button>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="font-mono font-bold text-sm text-foreground break-all">
+                        Order #{order.orderId}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Progress / Status Notices */}
+                {/* 2. Pending Payment Notice (Incomplete Razorpay payment) */}
                 {orderStatus.isPendingPayment && (
-                  <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                  <div className="px-5 sm:px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span>
-                        <strong>{orderStatus.label}:</strong> {orderStatus.description}
+                        <strong>Payment Pending:</strong> Payment was not completed. Tap &apos;Resume Payment&apos; to complete your purchase.
                       </span>
                     </div>
-                    {orderStatus.canResumePayment && (
+                    {actions.canResumePayment && (
                       <Button
-                        variant="ghost"
-                        size="xs"
+                        size="sm"
                         onClick={() => handleResumePayment(order)}
                         disabled={isResuming}
-                        className="text-xs font-semibold text-amber-800 dark:text-amber-200 hover:text-amber-950 underline underline-offset-2 p-0 h-auto"
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 px-3 shrink-0 font-medium self-start sm:self-auto"
                       >
                         {isResuming ? "Connecting..." : "Pay Now →"}
                       </Button>
@@ -634,139 +678,146 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                {orderStatus.key === "payment_expired" && (
-                  <div className="px-6 py-2.5 bg-stone-500/10 border-b border-stone-500/20 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-stone-500 flex-shrink-0" />
-                    <span>
-                      <strong>Payment Expired:</strong> {orderStatus.description}
-                    </span>
-                  </div>
-                )}
-
-                {orderStatus.key === "under_review" && (
-                  <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                    <span>
-                      <strong>Under Review:</strong> {orderStatus.description}
-                    </span>
-                  </div>
-                )}
-
-                {isCancellationRequested && (
-                  <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                      <span>
-                        <strong>Cancellation Requested:</strong> {isCourierUncertain
-                          ? "We are verifying dispatch status with our courier partner. Your order is on hold."
-                          : "Your cancellation request is being processed."}
-                      </span>
+                {/* 3. Refund Banner: ONLY when genuine refund lifecycle exists! NEVER on normal paid orders! */}
+                {refundDisplay && (
+                  <div className="px-5 sm:px-6 py-3 bg-secondary/50 border-b border-border/70">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${refundDisplay.badgeClass}`}>
+                          {refundDisplay.badgeLabel}
+                        </span>
+                        <span className="text-xs font-semibold text-foreground">
+                          ₹{refundDisplay.formattedAmount} to {refundDisplay.paymentMethodDisplay}
+                        </span>
+                      </div>
+                      {refundDisplay.verifiedAtDate && (
+                        <span className="text-[11px] text-muted-foreground">
+                          Processed on {refundDisplay.verifiedAtDate}
+                        </span>
+                      )}
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {refundDisplay.notice}
+                    </p>
                   </div>
                 )}
 
-                {isCourierRejected && (
-                  <div className="px-6 py-2.5 bg-destructive/10 border-b border-destructive/20 text-xs text-destructive flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                    <span>
-                      <strong>Cancellation Unavailable:</strong> This parcel has already been dispatched with the courier and cannot be stopped. You may initiate a return upon delivery.
-                    </span>
-                  </div>
-                )}
-
-                {/* Per-order error feedback */}
+                {/* Per-order error banner */}
                 {orderError && (
-                  <div className="px-6 py-2 bg-destructive/10 text-xs text-destructive border-b border-destructive/20 flex items-center justify-between">
+                  <div className="px-5 sm:px-6 py-2 bg-destructive/10 text-xs text-destructive border-b border-destructive/20 flex items-center justify-between">
                     <span>{orderError}</span>
                     <button
                       onClick={() => setCancelErrors(prev => ({ ...prev, [order._id]: null }))}
-                      className="text-destructive font-bold ml-2"
+                      className="text-destructive font-bold ml-2 text-sm"
+                      aria-label="Dismiss error"
                     >
                       ×
                     </button>
                   </div>
                 )}
 
-                {/* Items List */}
-                <div className="px-6 py-4">
-                  <div className="space-y-3">
-                    {order.items.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          {item.image ? (
-                            <img src={resolveMediaUrl(item.image)} alt={item.name} className="w-16 h-16 object-cover rounded-lg border border-border/50" />
+                {/* 4. Product Previews (Compact representation: 1 preview + N more items) */}
+                <div className="px-5 sm:px-6 py-4">
+                  {productInfo.previews.map((preview, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-lg overflow-hidden border border-border/70 bg-muted/40 shrink-0">
+                          {preview.image ? (
+                            <img
+                              src={resolveMediaUrl(preview.image)}
+                              alt={preview.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
                           ) : (
-                            <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
+                            <div className="w-full h-full flex items-center justify-center">
                               <Package className="w-6 h-6 text-muted-foreground" />
                             </div>
                           )}
-                          <div>
-                            <h3 className="font-medium text-foreground text-sm">{item.name}</h3>
-                            <p className="text-xs text-muted-foreground mt-0.5">Quantity: {item.quantity}</p>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4
+                            className="text-sm font-semibold text-foreground truncate"
+                            title={preview.name}
+                          >
+                            {preview.name}
+                          </h4>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Qty {preview.quantity}
                           </div>
-                        </div>
-                        <div className="text-base font-semibold text-foreground">
-                          ₹{item.price.toLocaleString('en-IN')}
+                          {productInfo.remainingCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrderDetails(order)}
+                              className="text-xs font-semibold text-primary hover:underline mt-1 block"
+                            >
+                              + {productInfo.remainingCount} more {productInfo.remainingCount === 1 ? "item" : "items"}
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Refund Status Progress Block */}
-                {order.refundSummary && (
-                  <div className="px-6 py-3.5 bg-secondary/30 border-t border-border/80">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Refund:
-                        </span>
-                        {getRefundBadge(order.refundSummary.status)}
-                      </div>
-                      <div className="text-sm font-semibold text-foreground">
-                        Refund Amount: ₹{(order.refundSummary.amountRupees || order.pricing.total).toLocaleString('en-IN')}
+                      {/* Desktop Total Amount display */}
+                      <div className="hidden sm:block text-right shrink-0">
+                        <div className="text-xs text-muted-foreground font-medium">Total</div>
+                        <div className="text-base font-bold text-foreground">
+                          ₹{order.pricing.total.toLocaleString('en-IN')}
+                        </div>
                       </div>
                     </div>
-                    {order.refundSummary.notice && (
-                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                        {order.refundSummary.notice}
-                      </p>
-                    )}
-                    {order.refundSummary.verifiedAt && (
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        Gateway processed on {new Date(order.refundSummary.verifiedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  ))}
+                </div>
 
-                {/* Footer & Actions */}
-                <div className="bg-secondary/40 px-6 py-4 border-t border-border">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      {order.shiprocket?.trackingUrl && (
-                        <a
-                          href={order.shiprocket.trackingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:text-primary/80 font-medium text-xs inline-flex items-center gap-1 underline underline-offset-4"
-                        >
-                          Track Shipment <ArrowRight className="w-3 h-3" />
-                        </a>
-                      )}
-                      {order.shiprocket?.courierName && (
-                        <span className="text-xs text-muted-foreground">
-                          via {order.shiprocket.courierName}
-                        </span>
+                {/* 5. Footer & Actions */}
+                <div className="bg-secondary/30 px-5 sm:px-6 py-3.5 border-t border-border/70">
+                  {/* Desktop Footer */}
+                  <div className="hidden sm:flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground font-medium">Payment:</span>
+                      <span className="font-semibold text-foreground">
+                        {paymentDisplay.combinedDisplay}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedOrderDetails(order)}
+                        className="text-xs h-8 px-3 border-border/80 hover:bg-secondary font-medium"
+                      >
+                        View Details
+                      </Button>
+
+                      {actions.canTrack && (
+                        order.shiprocket?.trackingUrl ? (
+                          <a
+                            href={order.shiprocket.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-md text-xs font-medium border border-border/80 bg-background hover:bg-secondary h-8 px-3 transition-colors"
+                          >
+                            Track Order
+                          </a>
+                        ) : (
+                          <Link href={`/track-order?orderId=${encodeURIComponent(order.orderId)}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs h-8 px-3 border-border/80 hover:bg-secondary font-medium"
+                            >
+                              Track Order
+                            </Button>
+                          </Link>
+                        )
                       )}
 
-                      {/* Resume Payment Action for unpaid online orders */}
-                      {orderStatus.canResumePayment && (
+                      {actions.canResumePayment && (
                         <Button
                           size="sm"
                           onClick={() => handleResumePayment(order)}
                           disabled={isResuming || isCancelling}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8 gap-1.5 shadow-sm"
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8 px-3 font-semibold shadow-sm"
                         >
                           {isResuming ? (
                             <>
@@ -774,16 +825,25 @@ export default function OrdersPage() {
                               Connecting...
                             </>
                           ) : (
-                            <>
-                              <CreditCard className="w-3.5 h-3.5" />
-                              Resume Payment
-                            </>
+                            "Resume Payment"
                           )}
                         </Button>
                       )}
 
-                      {/* Cancel Order Action */}
-                      {canCancelOrder && (
+                      {actions.canCheckStatus && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => refreshSingleOrder(order._id)}
+                          disabled={isRefreshing}
+                          className="text-xs h-8 px-3 border-border/80 hover:bg-secondary font-medium"
+                        >
+                          {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                          Check Status
+                        </Button>
+                      )}
+
+                      {actions.canCancel && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -793,31 +853,109 @@ export default function OrdersPage() {
                             setOptionalDetails("")
                           }}
                           disabled={isCancelling || isResuming}
-                          className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8"
+                          className="border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-8 px-3 font-medium"
                         >
-                          {isCancelling ? (
+                          {isCancelling ? "Cancelling..." : "Cancel Order"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mobile Footer: Intentionally Stacked */}
+                  <div className="sm:hidden flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center text-xs py-1 border-b border-border/40">
+                      <span className="text-muted-foreground font-medium">Payment</span>
+                      <span className="font-semibold text-foreground text-right">
+                        {paymentDisplay.combinedDisplay}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-baseline text-sm">
+                      <span className="text-muted-foreground font-medium">Total</span>
+                      <span className="text-lg font-bold text-foreground">
+                        ₹{order.pricing.total.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="default"
+                        onClick={() => setSelectedOrderDetails(order)}
+                        className="w-full text-xs h-10 border-border/80 font-medium"
+                      >
+                        View Order Details
+                      </Button>
+
+                      {actions.canTrack && (
+                        order.shiprocket?.trackingUrl ? (
+                          <a
+                            href={order.shiprocket.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center rounded-md text-xs font-medium border border-border/80 bg-background hover:bg-secondary h-10 transition-colors"
+                          >
+                            Track Order
+                          </a>
+                        ) : (
+                          <Link href={`/track-order?orderId=${encodeURIComponent(order.orderId)}`} className="w-full">
+                            <Button
+                              variant="outline"
+                              size="default"
+                              className="w-full text-xs h-10 border-border/80 font-medium"
+                            >
+                              Track Order
+                            </Button>
+                          </Link>
+                        )
+                      )}
+
+                      {actions.canResumePayment && (
+                        <Button
+                          size="default"
+                          onClick={() => handleResumePayment(order)}
+                          disabled={isResuming || isCancelling}
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-10 font-semibold shadow-sm"
+                        >
+                          {isResuming ? (
                             <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                              Cancelling...
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                              Connecting...
                             </>
                           ) : (
-                            "Cancel Order"
+                            "Resume Payment"
                           )}
                         </Button>
                       )}
 
-                      {!canCancelOrder && order.cannotCancelReason && order.status !== "cancelled" && order.status !== "delivered" && (
-                        <span className="text-[11px] text-muted-foreground italic" title={order.cannotCancelReason}>
-                          {order.cannotCancelReason}
-                        </span>
+                      {actions.canCheckStatus && (
+                        <Button
+                          variant="outline"
+                          size="default"
+                          onClick={() => refreshSingleOrder(order._id)}
+                          disabled={isRefreshing}
+                          className="w-full text-xs h-10 border-border/80 font-medium"
+                        >
+                          {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+                          Check Status
+                        </Button>
                       )}
-                    </div>
 
-                    <div className="text-right self-end sm:self-auto">
-                      <div className="text-xs text-muted-foreground">Total Amount</div>
-                      <div className="text-xl font-bold text-foreground">
-                        ₹{order.pricing.total.toLocaleString('en-IN')}
-                      </div>
+                      {actions.canCancel && (
+                        <Button
+                          variant="outline"
+                          size="default"
+                          onClick={() => {
+                            setOrderToCancel(order)
+                            setSelectedReason(CANCELLATION_REASONS[0])
+                            setOptionalDetails("")
+                          }}
+                          disabled={isCancelling || isResuming}
+                          className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 text-xs h-10 font-medium"
+                        >
+                          {isCancelling ? "Cancelling..." : "Cancel Order"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -872,6 +1010,121 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Comprehensive Order Details Dialog */}
+      <Dialog open={!!selectedOrderDetails} onOpenChange={(open) => !open && setSelectedOrderDetails(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold font-serif flex items-center justify-between gap-2">
+              <span>Order Details</span>
+              <span className="font-mono text-xs font-normal text-muted-foreground">
+                #{selectedOrderDetails?.orderId}
+              </span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Placed on {selectedOrderDetails && new Date(selectedOrderDetails.createdAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedOrderDetails && (
+            <div className="space-y-4 py-2">
+              {/* Status & Payment Header */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/60">
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${resolveCustomerOrderStatus(selectedOrderDetails).badgeColor}`}>
+                  {resolveCustomerOrderStatus(selectedOrderDetails).label}
+                </span>
+                <span className="text-xs font-semibold text-foreground">
+                  {resolvePaymentDisplay(selectedOrderDetails).combinedDisplay}
+                </span>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Purchased Items ({selectedOrderDetails.items?.length || 0})
+                </div>
+                <div className="divide-y divide-border/60 border border-border/60 rounded-xl overflow-hidden bg-card">
+                  {selectedOrderDetails.items?.map((item, idx) => (
+                    <div key={idx} className="p-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-md overflow-hidden border border-border/60 shrink-0 bg-muted/40">
+                          {item.image ? (
+                            <img
+                              src={resolveMediaUrl(item.image)}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="w-6 h-6 m-auto text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold text-foreground truncate" title={item.name}>
+                            {item.name}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Qty: {item.quantity} × ₹{item.price.toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold text-foreground shrink-0">
+                        ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Breakdown */}
+              <div className="space-y-2 p-3.5 rounded-xl bg-secondary/30 border border-border/60 text-xs">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>₹{selectedOrderDetails.pricing.subtotal.toLocaleString('en-IN')}</span>
+                </div>
+                {selectedOrderDetails.pricing.discount > 0 && (
+                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span>Discount</span>
+                    <span>-₹{selectedOrderDetails.pricing.discount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Shipping</span>
+                  <span>{selectedOrderDetails.pricing.shipping === 0 ? "FREE" : `₹${selectedOrderDetails.pricing.shipping.toLocaleString('en-IN')}`}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-foreground pt-2 border-t border-border/60">
+                  <span>Total Amount</span>
+                  <span>₹{selectedOrderDetails.pricing.total.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Courier details if available */}
+              {selectedOrderDetails.shiprocket?.courierName && (
+                <div className="p-3 rounded-xl bg-secondary/30 border border-border/60 text-xs space-y-1">
+                  <div className="font-semibold text-foreground">Delivery Partner:</div>
+                  <div className="text-muted-foreground">
+                    {selectedOrderDetails.shiprocket.courierName}
+                    {selectedOrderDetails.shiprocket.awbCode ? ` • AWB: ${selectedOrderDetails.shiprocket.awbCode}` : ""}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedOrderDetails(null)}
+              className="w-full sm:w-auto"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Accessible Cancellation Dialog */}
       <Dialog open={!!orderToCancel} onOpenChange={(open) => !open && setOrderToCancel(null)}>
