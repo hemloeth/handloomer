@@ -35,7 +35,7 @@ export function RecentlyViewed({ currentId }: { currentId: string }) {
       // No bulk endpoint — paginated list + client filter is bounded (8 ids).
       // Fetch one small page and keep only recent IDs (no N requests).
       try {
-        const data = await apiGet(`/api/product/allproducts?limit=100&fullData=false`)
+        const data = await apiPost('/api/product/cards-by-ids', { ids: others })
         if (cancelled || !data.success) return
         const byId = new Map(data.products.map((d: any) => [String(d._id), d]))
         const mapped: Product[] = others

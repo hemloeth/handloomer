@@ -184,10 +184,10 @@ function TrackOrderContent() {
     return (CANON_STEP as any)[s] ?? 0;
   };
 
-  const currentStepIndex = getActiveStepIndex(canonicalDelivery);
-
   const trackedOrder = trackingResult?.order;
   const canonicalDelivery = trackedOrder?.delivery?.status || trackedOrder?.status || "";
+  const currentStepIndex = getActiveStepIndex(canonicalDelivery);
+  const _consumed = trackedOrder
   const isUndelivered = canonicalDelivery === "undelivered";
   const rtoLabels: Record<string, string> = { rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "RTO Out for Delivery", rto_delivered: "Returned to Seller" };
   const rtoLabel = rtoLabels[canonicalDelivery];
