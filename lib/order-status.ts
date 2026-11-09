@@ -103,19 +103,6 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     order.cancellationSummary?.status === 'completed' ||
     order.cancellation?.status === 'completed'
 
-  if (rtoLabel) {
-    return {
-      key: "returned",
-      label: rtoLabel,
-      badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
-      iconName: "package",
-      description: "Your parcel is being returned to our seller.",
-      canResumePayment: false,
-      canCancel: false,
-      isPendingPayment: false,
-      isTerminal: false,
-    }
-  }
   const refundStatus = (order.refundSummary?.status || order.refund?.status || '').toLowerCase()
 
   if (isCancellationRequested) {
@@ -670,6 +657,20 @@ export function resolveOrderActions(order: any): CustomerOrderActions {
     !status.isTerminal &&
     !['shipped', 'out_for_delivery', 'delivered', 'returned'].includes(status.key)
   );
+
+if (rtoLabel) {
+    return {
+      key: "returned",
+      label: rtoLabel,
+      badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
+      iconName: "package",
+      description: "Your parcel is being returned to our seller.",
+      canResumePayment: false,
+      canCancel: false,
+      isPendingPayment: false,
+      isTerminal: false,
+    }
+  }
 
   return {
     canViewDetails: true,
