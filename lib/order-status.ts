@@ -86,6 +86,8 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     damaged: "Package Damaged",
   }
   const rtoLabel = RTO_LABELS[deliveryStatus]
+  const DELIVERY_LABELS: Record<string, { label: string, key: string }> = { pending: { label: "Order Confirmed", key: "placed" }, picked_up: { label: "Picked Up", key: "processing" }, shipped: { label: "Shipped", key: "shipped" }, in_transit: { label: "In Transit", key: "in_transit" }, out_for_delivery: { label: "Out for Delivery", key: "out_for_delivery" }, delivered: { label: "Delivered", key: "delivered" } }
+  const deliveryMapped = DELIVERY_LABELS[deliveryStatus]
   const paymentMethod = (order.payment?.method || '').toLowerCase()
   const paymentStatus = (order.payment?.status || '').toLowerCase()
   const isCod = paymentMethod === 'cod'
@@ -626,6 +628,20 @@ export function resolveProductPreviews(items: any[] | undefined | null): Product
   const previews = allItems.slice(0, maxPreviews);
   const remainingCount = allItems.length - previews.length;
 
+  if (deliveryMapped && deliveryStatus) {
+    return {
+      key: deliveryMapped.key,
+      label: deliveryMapped.label,
+      badgeColor: deliveryStatus === "delivered" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200",
+      iconName: "package",
+      description: "Live courier status for your order.",
+      canResumePayment: false,
+      canCancel: false,
+      isPendingPayment: false,
+      isTerminal: deliveryStatus === "delivered",
+    }
+  }
+
   return { previews, remainingCount, totalQuantity };
 }
 
@@ -657,22 +673,7 @@ export function resolveOrderActions(order: any): CustomerOrderActions {
     !status.isTerminal &&
     !['shipped', 'out_for_delivery', 'delivered', 'returned'].includes(status.key)
   );
-
-if (rtoLabel) {
-    return {
-      key: "returned",
-      label: rtoLabel,
-      badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
-      iconName: "package",
-      description: "Your parcel is being returned to our seller.",
-      canResumePayment: false,
-      canCancel: false,
-      isPendingPayment: false,
-      isTerminal: false,
-    }
-  }
-
-  return {
+return {
     canViewDetails: true,
     canTrack,
     canCancel,

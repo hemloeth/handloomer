@@ -189,6 +189,7 @@ function TrackOrderContent() {
   const currentStepIndex = getActiveStepIndex(canonicalDelivery);
   const _consumed = trackedOrder
   const DELIVERY_LABELS: Record<string, string> = { pending: "Order Confirmed", picked_up: "Picked Up", shipped: "Shipped", in_transit: "In Transit", out_for_delivery: "Out for Delivery", delivered: "Delivered", undelivered: "Delivery Attempt Failed", rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "Return Out for Delivery", rto_delivered: "Returned to Seller", lost: "Package Lost", damaged: "Package Damaged", cancelled: "Cancelled" };
+  const canonicalBadgeClass = canonicalDelivery === "delivered" ? "bg-emerald-600 text-white" : (["undelivered","lost","damaged","cancelled"].includes(canonicalDelivery) ? "bg-rose-100 text-rose-700" : (["rto_initiated","rto_in_transit","rto_out_for_delivery","rto_delivered"].includes(canonicalDelivery) ? "bg-amber-100 text-amber-800" : "bg-stone-900 text-white"));
   const canonicalStatusLabel = DELIVERY_LABELS[canonicalDelivery] ?? "Order Confirmed";
   const isUndelivered = canonicalDelivery === "undelivered";
   const rtoLabels: Record<string, string> = { rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "RTO Out for Delivery", rto_delivered: "Returned to Seller" };
@@ -203,7 +204,7 @@ function TrackOrderContent() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center">
           {isUndelivered && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">Delivery Attempt Failed  Undelivered</span>}
           {rtoLabel && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">{rtoLabel}</span>}
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm ${canonicalDelivery === "delivered" ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm ${canonicalBadgeClass}`}>
             <Truck className="w-3.5 h-3.5 text-amber-300" />
             Shiprocket Live Tracker
           </span>
