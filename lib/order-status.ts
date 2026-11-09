@@ -73,21 +73,9 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     }
   }
 
-  // Logistics (canonical delivery.status)  RTO never becomes Delivered.
+  // Logistics (canonical delivery.status) — RTO never becomes Delivered.
   const rawStatus = (order.status || '').toLowerCase()
   const deliveryStatus = ((order as any).delivery?.status || "").toString().toLowerCase()
-  const RTO_LABELS: Record<string, string> = {
-    undelivered: "Delivery Attempt Failed",
-    rto_initiated: "Return Initiated",
-    rto_in_transit: "Returning to Seller",
-    rto_out_for_delivery: "Return Out for Delivery",
-    rto_delivered: "Returned to Seller",
-    lost: "Package Lost",
-    damaged: "Package Damaged",
-  }
-  const rtoLabel = RTO_LABELS[deliveryStatus]
-  const DELIVERY_LABELS: Record<string, { label: string, key: string }> = { pending: { label: "Order Confirmed", key: "placed" }, picked_up: { label: "Picked Up", key: "processing" }, shipped: { label: "Shipped", key: "shipped" }, in_transit: { label: "In Transit", key: "in_transit" }, out_for_delivery: { label: "Out for Delivery", key: "out_for_delivery" }, delivered: { label: "Delivered", key: "delivered" } }
-  const deliveryMapped = DELIVERY_LABELS[deliveryStatus]
   const paymentMethod = (order.payment?.method || '').toLowerCase()
   const paymentStatus = (order.payment?.status || '').toLowerCase()
   const isCod = paymentMethod === 'cod'
@@ -221,7 +209,193 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     }
   }
 
-  // 3. Physical Dispatch & Delivery States
+  // 3. Canonical Delivery / Logistics Progression (authoritative over stale order.status)
+  if (deliveryStatus) {
+    if (deliveryStatus === 'pending') {
+      return {
+        key: 'placed',
+        label: 'Order Confirmed',
+        badgeColor: 'bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
+        iconName: 'package',
+        description: 'Order confirmed and being prepared for fulfillment.',
+        canResumePayment: false,
+        canCancel: order.canCancel ?? true,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'picked_up') {
+      return {
+        key: 'processing',
+        label: 'Picked Up',
+        badgeColor: 'bg-indigo-100 text-indigo-900 border border-indigo-300 dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-800',
+        iconName: 'package',
+        description: 'Courier partner has picked up your package.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'shipped') {
+      return {
+        key: 'shipped',
+        label: 'Shipped',
+        badgeColor: 'bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
+        iconName: 'truck',
+        description: 'Your order has been dispatched and is on its way.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'in_transit') {
+      return {
+        key: 'in_transit',
+        label: 'In Transit',
+        badgeColor: 'bg-sky-100 text-sky-900 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
+        iconName: 'truck',
+        description: 'Your order is currently in transit to your city.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'out_for_delivery') {
+      return {
+        key: 'out_for_delivery',
+        label: 'Out for Delivery',
+        badgeColor: 'bg-purple-100 text-purple-900 border border-purple-300 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-800',
+        iconName: 'truck',
+        description: 'Your package is out for delivery with our courier partner today.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'delivered') {
+      return {
+        key: 'delivered',
+        label: 'Delivered',
+        badgeColor: 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800',
+        iconName: 'check-circle',
+        description: 'Your package has been safely delivered.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: true,
+      }
+    }
+    if (deliveryStatus === 'undelivered') {
+      return {
+        key: 'undelivered',
+        label: 'Delivery Attempt Failed',
+        badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+        iconName: 'alert-triangle',
+        description: 'Delivery attempt failed. Courier will attempt re-delivery.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'rto_initiated') {
+      return {
+        key: 'rto_initiated',
+        label: 'Return Initiated',
+        badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+        iconName: 'rotate-ccw',
+        description: 'Package is being returned to our warehouse.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'rto_in_transit') {
+      return {
+        key: 'rto_in_transit',
+        label: 'Returning to Seller',
+        badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+        iconName: 'rotate-ccw',
+        description: 'Package is in transit back to our seller warehouse.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'rto_out_for_delivery') {
+      return {
+        key: 'rto_out_for_delivery',
+        label: 'Return Out for Delivery',
+        badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+        iconName: 'rotate-ccw',
+        description: 'Return package is out for delivery to our seller warehouse.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: false,
+      }
+    }
+    if (deliveryStatus === 'rto_delivered') {
+      return {
+        key: 'rto_delivered',
+        label: 'Returned to Seller',
+        badgeColor: 'bg-stone-100 text-stone-900 border border-stone-300 dark:bg-stone-800 dark:text-stone-200 dark:border-stone-700',
+        iconName: 'rotate-ccw',
+        description: 'Package has been returned to our warehouse.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: true,
+      }
+    }
+    if (deliveryStatus === 'lost') {
+      return {
+        key: 'lost',
+        label: 'Package Lost',
+        badgeColor: 'bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800',
+        iconName: 'alert-triangle',
+        description: 'Package reported lost by courier partner. Contact support for refund/replacement.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: true,
+      }
+    }
+    if (deliveryStatus === 'damaged') {
+      return {
+        key: 'damaged',
+        label: 'Package Damaged',
+        badgeColor: 'bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800',
+        iconName: 'alert-triangle',
+        description: 'Package reported damaged during transit. Contact support for assistance.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: true,
+      }
+    }
+    if (deliveryStatus === 'cancelled') {
+      return {
+        key: 'cancelled',
+        label: 'Cancelled',
+        badgeColor: 'bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800',
+        iconName: 'x-circle',
+        description: 'Shipment was cancelled with the courier partner.',
+        canResumePayment: false,
+        canCancel: false,
+        isPendingPayment: false,
+        isTerminal: true,
+      }
+    }
+  }
+
+  // 4. Physical Dispatch & Delivery States (fallback when no canonical delivery.status)
   if (rawStatus === 'delivered') {
     return {
       key: 'delivered',
@@ -628,20 +802,6 @@ export function resolveProductPreviews(items: any[] | undefined | null): Product
   const previews = allItems.slice(0, maxPreviews);
   const remainingCount = allItems.length - previews.length;
 
-  if (deliveryMapped && deliveryStatus) {
-    return {
-      key: deliveryMapped.key,
-      label: deliveryMapped.label,
-      badgeColor: deliveryStatus === "delivered" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200",
-      iconName: "package",
-      description: "Live courier status for your order.",
-      canResumePayment: false,
-      canCancel: false,
-      isPendingPayment: false,
-      isTerminal: deliveryStatus === "delivered",
-    }
-  }
-
   return { previews, remainingCount, totalQuantity };
 }
 
@@ -661,19 +821,48 @@ export function resolveOrderActions(order: any): CustomerOrderActions {
   const canResumePayment = Boolean(status.canResumePayment && (order?.canResumePayment ?? true));
   const canCheckStatus = Boolean(status.isPendingPayment);
 
-  // Track order: only useful if placed, confirmed, shipped, out_for_delivery, delivered
-  const trackableKeys = ['order_placed', 'processing', 'shipped', 'out_for_delivery', 'delivered'];
+  // Track order: only useful if placed, confirmed, shipped, out_for_delivery, delivered, or in logistics
+  const trackableKeys = [
+    'order_placed',
+    'placed',
+    'processing',
+    'picked_up',
+    'shipped',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+    'undelivered',
+    'rto_initiated',
+    'rto_in_transit',
+    'rto_out_for_delivery',
+    'rto_delivered',
+  ];
   const canTrack = trackableKeys.includes(status.key) && !status.isPendingPayment;
 
-  // Cancel order: only if canCancel is true, not shipped/delivered/cancelled/pending payment
+  // Cancel order: only if canCancel is true, not shipped/delivered/cancelled/pending payment or in transit/RTO
+  const nonCancellableKeys = [
+    'shipped',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+    'returned',
+    'undelivered',
+    'rto_initiated',
+    'rto_in_transit',
+    'rto_out_for_delivery',
+    'rto_delivered',
+    'lost',
+    'damaged',
+  ];
   const canCancel = Boolean(
     status.canCancel &&
     (order?.canCancel ?? true) &&
     !status.isPendingPayment &&
     !status.isTerminal &&
-    !['shipped', 'out_for_delivery', 'delivered', 'returned'].includes(status.key)
+    !nonCancellableKeys.includes(status.key)
   );
-return {
+
+  return {
     canViewDetails: true,
     canTrack,
     canCancel,

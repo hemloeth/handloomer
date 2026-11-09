@@ -365,7 +365,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell>₹{order.pricing.total.toLocaleString("en-IN")}</TableCell>
+                  <TableCell>₹{(order.pricing?.total ?? (order as any).total ?? 0).toLocaleString("en-IN")}</TableCell>
                   <TableCell>
                     {(() => {
                       const label = getPaymentLabel(order)
@@ -642,19 +642,19 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
 
               {/* Pricing */}
               <div className="border-t pt-4 space-y-1.5 text-sm">
-                {typeof viewOrder.pricing.subtotal === "number" && (
+                {typeof viewOrder.pricing?.subtotal === "number" && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₹{viewOrder.pricing.subtotal.toLocaleString("en-IN")}</span>
                   </div>
                 )}
-                {typeof viewOrder.pricing.shipping === "number" && (
+                {typeof viewOrder.pricing?.shipping === "number" && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Shipping</span>
                     <span>{viewOrder.pricing.shipping === 0 ? "Free" : `₹${viewOrder.pricing.shipping.toLocaleString("en-IN")}`}</span>
                   </div>
                 )}
-                {typeof viewOrder.pricing.discount === "number" && viewOrder.pricing.discount > 0 && (
+                {typeof viewOrder.pricing?.discount === "number" && viewOrder.pricing.discount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Discount {viewOrder.pricing.couponCode ? `(${viewOrder.pricing.couponCode})` : ""}</span>
                     <span className="text-primary">-₹{viewOrder.pricing.discount.toLocaleString("en-IN")}</span>
@@ -662,7 +662,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                 )}
                 <div className="flex justify-between font-semibold text-base pt-1.5 border-t">
                   <span>Total</span>
-                  <span>₹{viewOrder.pricing.total.toLocaleString("en-IN")}</span>
+                  <span>₹{(viewOrder.pricing?.total ?? (viewOrder as any).total ?? 0).toLocaleString("en-IN")}</span>
                 </div>
               </div>
             </div>
