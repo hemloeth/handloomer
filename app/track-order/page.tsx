@@ -176,17 +176,20 @@ function TrackOrderContent() {
     { key: 'delivered', label: 'Delivered', desc: 'Handover complete' },
   ];
 
+  // Canonical delivery.status only — never parse raw provider strings.
+  // Undelivered/RTO map to their own steps (never 5=Delivered).
+  const CANON_STEP = { pending: 0, picked_up: 2, shipped: 2, in_transit: 3, out_for_delivery: 4, delivered: 5, undelivered: 1, rto_initiated: 1, rto_in_transit: 1, rto_out_for_delivery: 1, rto_delivered: 1 } as const;
   const getActiveStepIndex = (statusStr: string) => {
-    const s = String(statusStr).toLowerCase();
-    if (s.includes('deliver')) return 5;
-    if (s.includes('out for') || s.includes('reaching')) return 4;
-    if (s.includes('transit') || s.includes('in-transit') || s.includes('dispatched')) return 3;
-    if (s.includes('ship') || s.includes('pickup') || s.includes('picked')) return 2;
-    if (s.includes('pack') || s.includes('manifest')) return 1;
-    return 0; // placed/confirmed
+    const s = String(statusStr).toLowerCase().trim().replace(/[\s-]+/g, "_");
+    return (CANON_STEP as any)[s] ?? 0;
   };
 
   const currentStepIndex = getActiveStepIndex(currentStatus);
+
+  const canonicalDelivery = (order as any)?.delivery?.status || (order as any)?.deliveryStatus || order?.status || "";
+  const isUndelivered = canonicalDelivery === "undelivered";
+  const rtoLabels: Record<string, string> = { rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "RTO Out for Delivery", rto_delivered: "Returned to Seller" };
+  const rtoLabel = rtoLabels[canonicalDelivery];
 
   return (
     <div className="min-h-screen bg-[#faf8f5] dark:bg-[#121212] text-foreground">
@@ -195,6 +198,8 @@ function TrackOrderContent() {
       {/* Hero Header */}
       <div className="relative pt-[104px] lg:pt-[120px] pb-12 bg-gradient-to-b from-stone-100 to-[#faf8f5] dark:from-stone-900/60 dark:to-[#121212] border-b border-border/50">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center">
+          {isUndelivered && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">Delivery Attempt Failed — Undelivered</span>}
+          {rtoLabel && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">{rtoLabel}</span>}
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-stone-900 text-white dark:bg-stone-800 mb-3 shadow-sm">
             <Truck className="w-3.5 h-3.5 text-amber-300" />
             Shiprocket Live Tracker

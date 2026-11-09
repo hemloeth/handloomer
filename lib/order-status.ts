@@ -41,6 +41,14 @@ export interface MinimalOrderState {
     state?: string
     expiresAt?: string | Date
   }
+  delivery?: {
+    status?: string
+    rawStatus?: string
+    rawStatusCode?: string
+    lastEventAt?: string | Date
+    expectedDeliveryAt?: string | Date
+    lastSyncedAt?: string | Date
+  }
   resourcesReleased?: boolean
   canCancel?: boolean
   canResumePayment?: boolean
@@ -65,7 +73,19 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     }
   }
 
+  // Logistics (canonical delivery.status) — RTO never becomes Delivered.
   const rawStatus = (order.status || '').toLowerCase()
+  const deliveryStatus = ((order as any).delivery?.status || "").toString().toLowerCase()
+  const RTO_LABELS: Record<string, string> = {
+    undelivered: "Undelivered — Delivery Attempt Failed",
+    rto_initiated: "Return Initiated",
+    rto_in_transit: "Returning to Seller",
+    rto_out_for_delivery: "RTO Out for Delivery",
+    rto_delivered: "Returned to Seller",
+    lost: "Package Lost",
+    damaged: "Package Damaged",
+  }
+  const rtoLabel = RTO_LABELS[deliveryStatus]
   const paymentMethod = (order.payment?.method || '').toLowerCase()
   const paymentStatus = (order.payment?.status || '').toLowerCase()
   const isCod = paymentMethod === 'cod'
