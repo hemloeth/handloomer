@@ -188,6 +188,8 @@ function TrackOrderContent() {
   const canonicalDelivery = trackedOrder?.delivery?.status || trackedOrder?.status || "";
   const currentStepIndex = getActiveStepIndex(canonicalDelivery);
   const _consumed = trackedOrder
+  const DELIVERY_LABELS: Record<string, string> = { pending: "Order Confirmed", picked_up: "Picked Up", shipped: "Shipped", in_transit: "In Transit", out_for_delivery: "Out for Delivery", delivered: "Delivered", undelivered: "Delivery Attempt Failed", rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "Return Out for Delivery", rto_delivered: "Returned to Seller", lost: "Package Lost", damaged: "Package Damaged", cancelled: "Cancelled" };
+  const canonicalStatusLabel = DELIVERY_LABELS[canonicalDelivery] ?? "Order Confirmed";
   const isUndelivered = canonicalDelivery === "undelivered";
   const rtoLabels: Record<string, string> = { rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "RTO Out for Delivery", rto_delivered: "Returned to Seller" };
   const rtoLabel = rtoLabels[canonicalDelivery];
@@ -201,7 +203,7 @@ function TrackOrderContent() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center">
           {isUndelivered && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">Delivery Attempt Failed  Undelivered</span>}
           {rtoLabel && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">{rtoLabel}</span>}
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-stone-900 text-white dark:bg-stone-800 mb-3 shadow-sm">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm ${canonicalDelivery === "delivered" ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>
             <Truck className="w-3.5 h-3.5 text-amber-300" />
             Shiprocket Live Tracker
           </span>
@@ -331,7 +333,7 @@ function TrackOrderContent() {
                   <div className="flex items-center gap-3">
                     <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      {currentStatus}
+                      {canonicalStatusLabel}
                     </span>
                     {courierName && (
                       <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
