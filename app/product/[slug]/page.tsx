@@ -4,7 +4,8 @@ import { Footer } from "@/components/layout/footer"
 import { ProductDetails } from "@/components/products/product-details"
 import { ProductReviews } from "@/components/products/product-reviews"
 import { JsonLd } from "@/components/common/json-ld"
-import { RelatedProducts } from "@/components/products/related-products"
+import { DiscoveryFeed } from "@/components/products/discovery-feed"
+import { RecentlyViewed } from "@/components/products/recently-viewed"
 import { fetchProductBySku, fetchPaginatedProducts, fetchProductsFromDB } from "@/lib/products"
 import type { Product } from "@/lib/products"
 import { notFound } from "next/navigation"
@@ -125,13 +126,9 @@ export default async function ProductPage({ params }: Props) {
     })
   }
 
-  async function RelatedSection() {
-    const p = product as Product
-    const relatedResponse = await fetchPaginatedProducts({ category: p.category, limit: 5 });
-    const relatedProducts = relatedResponse.products.filter(x => x.id !== p.id).slice(0, 4);
-    return <RelatedProducts products={relatedProducts} category={p.category} />
-  }
-
+  // Discovery replaces static related: first batch (8) is the Suspense
+  // boundary; infinite batches append as user scrolls. Main product above
+  // never waits for it.
   return (
     <main className="min-h-screen">
       <Header />
@@ -145,14 +142,17 @@ export default async function ProductPage({ params }: Props) {
           <ProductReviews productId={product.id} productName={product.name} />
         </div>
 
-        <Suspense fallback={<div className="py-16 text-center text-muted-foreground">Loading related products…</div>}>
-          <RelatedSection />
+        <Suspense fallback={<div className="py-16 text-center text-muted-foreground">Loading more sarees…</div>}>
+          <DiscoveryFeed productId={product.id} productSlug={product.slug} />
         </Suspense>
+
+        <RecentlyViewed currentId={product.id} />
       </div>
 
       <Footer />
     </main>
   )
+
 }
 
 export async function generateStaticParams() {
