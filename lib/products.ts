@@ -58,9 +58,11 @@ function mapProductFromDB(dbProduct: any): Product {
     price: dbProduct.price,
     originalPrice: dbProduct.regularPrice || dbProduct.price,
     image: dbProduct.mainImage,
+    // Card carries main + at most one alternate (hover). Full gallery is
+    // detail-page only — avoids N gallery/video decodes per grid.
     images: [
       dbProduct.mainImage,
-      ...(dbProduct.galleryImages ? dbProduct.galleryImages.map((img: any) => img.url) : [])
+      ...(dbProduct.galleryImages ? dbProduct.galleryImages.slice(0, 1).map((img: any) => img.url) : [])
     ].filter(Boolean),
     videos: isVideoStr ? [
       (() => {
@@ -106,9 +108,9 @@ function mapProductFromDB(dbProduct: any): Product {
 // full-catalog pages MUST use `fetchPaginatedProducts` (or the client
 // variant) with explicit page/limit + filters so catalogs >100 work.
 //
-// Uses the LIST PROJECTION (no `fullData=true`): heavy per-product fields
-// are excluded because CARDS never render them. Full detail is loaded
-// per-product via `fetchProductBySku`, so no visible data is lost.
+// Card/list payload is intentionally light: list projection excludes
+// full specs; gallery is trimmed to main + first alternate for hover.
+// Product detail always fetches the single full product separately.
 export async function fetchProductsFromDB(limit: number = 100): Promise<Product[]> {
   try {
     const { apiServerGet } = await import("@/lib/api");

@@ -9,7 +9,6 @@ import { CartToast } from "@/components/cart/cart-toast"
 import WhatsAppFloat from "@/components/common/whatsapp-float"
 import { ClientOnly } from "@/components/common/client-only"
 import { ProductProvider } from "@/context/product-context"
-import { fetchProductsFromDB } from "@/lib/products"
 import { Toaster } from "sonner"
 import './globals.css'
 
@@ -34,13 +33,15 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Fetch products on the Server to preserve SEO
-  const initialProducts = await fetchProductsFromDB()
+  // Never block unrelated routes on a 100-product catalog fetch.
+  // Provider seeds from an empty list and lazy-hydrates in background
+  // (stale-while-revalidate, 30s). Homepage sections fetch their own data.
+  const initialProducts: [] = []
 
   return (
     <html lang="en" suppressHydrationWarning>

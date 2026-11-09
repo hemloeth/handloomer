@@ -1,12 +1,18 @@
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
-
+// Detail-shaped skeleton (no spinner copy) — keeps layout stable while streaming.
 export default function ProductLoading() {
     return (
-        <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4">
-            <LoadingSpinner size="lg" className="text-primary w-10 h-10" />
-            <p className="text-sm font-sans tracking-widest uppercase text-muted-foreground animate-pulse">
-                Loading Details...
-            </p>
+        <div className="min-h-screen">
+            <div style={{ paddingTop: 'calc(var(--header-offset))' }} className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 py-8 grid lg:grid-cols-2 gap-8">
+                <div className="aspect-[500/650] bg-muted animate-pulse" />
+                <div className="space-y-4">
+                    <div className="h-6 bg-muted animate-pulse w-1/3" />
+                    <div className="h-10 bg-muted animate-pulse w-2/3" />
+                    <div className="h-6 bg-muted animate-pulse w-1/4" />
+                    <div className="h-6 bg-muted animate-pulse w-1/5" />
+                    <div className="h-12 bg-muted animate-pulse" />
+                    <div className="h-12 bg-muted animate-pulse" />
+                </div>
+            </div>
         </div>
     )
 }

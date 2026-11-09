@@ -110,9 +110,10 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
         : undefined
 
   return (
-    <Link href={`/product/${slug}`} className="group relative w-full block cursor-pointer">
+    <div className="group relative w-full">
       <div className="relative w-full mb-4" ref={setRefs}>
-        <div className="aspect-[3/4] overflow-hidden bg-black relative">
+        <div className="aspect-[3/4] overflow-hidden bg-black relative">{""}
+          <Link href={`/product/${slug}`} className="absolute inset-0 z-10" aria-label={`View ${title}`}><span className="sr-only">View {title}</span></Link>
           {isNearScreen && (
             <video
               ref={videoRef}
@@ -143,12 +144,8 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
 
           {/* Play/Pause Button */}
           <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              togglePlay()
-            }}
-            className="absolute top-1 right-8 md:top-2 md:right-12 p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors opacity-0 group-hover:opacity-100 z-10"
+            onClick={togglePlay}
+            className="absolute top-1 right-8 md:top-2 md:right-12 p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors opacity-0 group-hover:opacity-100 md:focus-visible:opacity-100 md:active:scale-95 z-20"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
@@ -161,13 +158,8 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
           {/* Quick Actions */}
           <div className="absolute top-1 right-1 md:top-2 md:right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
             <button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleWishlistClick()
-              }}
-              className={`p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors shadow-sm ${isWishlisted ? 'text-primary' : ''
-                }`}
+              onClick={handleWishlistClick}
+              className={`p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors shadow-sm active:scale-95 z-20 ${isWishlisted ? 'text-primary' : ''}`}
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
             >
               <Heart className={`w-3 h-3 md:w-4 md:h-4 ${isWishlisted ? 'fill-primary' : ''}`} />
@@ -175,14 +167,10 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
           </div>
 
           {/* Add to Cart Button */}
-          <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
+          <div className="absolute bottom-0 left-0 right-0 p-2 md:p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-20">
             <button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                addToCart(targetProduct)
-              }}
-              className="w-full bg-background/95 hover:bg-background py-1.5 md:py-2.5 px-2 md:px-4 flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-medium transition-colors rounded-sm"
+              onClick={() => addToCart(targetProduct)}
+              className="w-full bg-background/95 hover:bg-background py-1.5 md:py-2.5 px-2 md:px-4 flex items-center justify-center gap-1 md:gap-2 text-xs md:text-sm font-medium transition-colors rounded-sm active:scale-95"
             >
               <ShoppingBag className="w-3 h-3 md:w-4 md:h-4" />
               <span className="hidden sm:inline">Add to Cart</span>
@@ -193,9 +181,7 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
       </div>
 
       <div className="block">
-        <h3 className="font-medium text-xs md:text-sm leading-tight mb-1 md:mb-2 group-hover:text-primary transition-colors line-clamp-2">
-          {title}
-        </h3>
+        <h3 className="font-medium text-xs md:text-sm leading-tight mb-1 md:mb-2 group-hover:text-primary transition-colors line-clamp-2">{title}</h3>
         <div className="flex items-center gap-1 md:gap-2 flex-wrap">
           <span className="font-semibold text-xs md:text-sm">₹{price.toLocaleString('en-IN')}</span>
           {originalPrice > price && (
@@ -205,7 +191,7 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
           )}
         </div>
       </div>
-    </Link>
+    </div>
   )
 }
 
@@ -289,19 +275,10 @@ function VideoCollectionContent() {
                 key={video.productId || index}
                 className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-700"
               >
-                {/* Ambient Blurred Background Video to fill wide screens */}
-                <video
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="auto"
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  poster={video.image ? resolveMediaUrl(video.image) : undefined}
-                  className="absolute inset-0 w-full h-full object-cover blur-3xl opacity-35 scale-110 pointer-events-none select-none"
-                  src={resolveMediaUrl(video.videoSrc)}
-                />
+                {/* Single decoded hero video; ambient is just poster + blur */}
+                {video.image && (
+                  <div aria-hidden="true" className="absolute inset-0 bg-cover bg-center blur-3xl opacity-35 scale-110 pointer-events-none select-none" style={{ backgroundImage: `url(${resolveMediaUrl(video.image)})` }} />
+                )}
 
                 {/* Dark Vignette Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/60 pointer-events-none" />
@@ -313,7 +290,7 @@ function VideoCollectionContent() {
                     loop
                     muted
                     playsInline
-                    preload="auto"
+                    preload="metadata"
                     poster={video.image ? resolveMediaUrl(video.image) : undefined}
                     className="h-full w-auto max-w-full max-h-full object-contain object-center shadow-2xl drop-shadow-[0_25px_50px_rgba(0,0,0,0.9)]"
                     src={resolveMediaUrl(video.videoSrc)}

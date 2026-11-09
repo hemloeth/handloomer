@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Header } from "@/components/layout/header"
 import { AutoScrollHero } from "@/components/sections/auto-scroll-hero"
 import { NewCollections } from "@/components/sections/new-collections"
@@ -11,47 +12,37 @@ import { Footer } from "@/components/layout/footer"
 import { apiServerGet } from "@/lib/api"
 import { fetchNewestProducts } from "@/lib/products"
 
-export default async function Home() {
-  // Hero slides and categories are INDEPENDENT reads — fetch them in parallel
-  // so the page waits on the slower of the two, not their sum (spec §12). Each
-  // handles its own failure so one bad widget can't blank the whole homepage.
-  // "Latest Arrivals" = newest 20 by createdAt DESC (backend-driven, not
-  // sliced from the global 100-cap provider). no-store, so every full
-  // refresh + client return to "/" gets live DB state.
-  const [heroResult, catResult, newestResult] = await Promise.allSettled([
-    apiServerGet('/api/hero', { revalidate: 60 }),
-    apiServerGet('/api/category/allcategory', { revalidate: 60 }),
-    fetchNewestProducts(),
-  ])
+async function HeroSection() {
+  const data = await apiServerGet('/api/hero', { revalidate: 60 }).catch(() => null)
+  return <AutoScrollHero initialSlides={data?.slides ?? []} />
+}
 
-  let heroSlides: any[] = []
-  if (heroResult.status === "fulfilled" && heroResult.value && heroResult.value.slides) {
-    heroSlides = heroResult.value.slides
-  } else if (heroResult.status === "rejected") {
-    console.error("Failed to fetch hero slides on server:", heroResult.reason)
-  }
+async function NewestSection() {
+  const products = await fetchNewestProducts().catch(() => [])
+  return <NewCollections initialProducts={products} />
+}
 
-  let categories: any[] = []
-  if (catResult.status === "fulfilled" && catResult.value && catResult.value.categories) {
-    categories = catResult.value.categories
-  } else if (catResult.status === "rejected") {
-    console.error("Failed to fetch categories on server:", catResult.reason)
-  }
+async function CategoriesSection() {
+  const data = await apiServerGet('/api/category/allcategory', { revalidate: 60 }).catch(() => null)
+  return <CategoryGrid initialCategories={data?.categories ?? []} />
+}
 
-  let newestProducts: any[] = []
-  if (newestResult.status === "fulfilled" && newestResult.value) {
-    newestProducts = newestResult.value
-  } else if (newestResult.status === "rejected") {
-    console.error("Failed to fetch newest products on server:", newestResult.reason)
-  }
-
+export default function Home() {
+  // Shell renders immediately; each section streams independently behind
+  // Suspense so one slow API can't block the logo/Home click feedback.
   return (
     <main className="min-h-screen">
       <Header />
-      <AutoScrollHero initialSlides={heroSlides} />
+      <Suspense fallback={<div className="min-h-[540px] bg-muted animate-pulse" />}>
+        <HeroSection />
+      </Suspense>
       <div>
-        <NewCollections initialProducts={newestProducts} />
-        <CategoryGrid initialCategories={categories} />
+        <Suspense fallback={<div className="py-16 bg-background"><div className="max-w-[1500px] mx-auto px-4"><div className="grid grid-cols-2 sm:grid-cols-4 gap-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="aspect-[500/650] bg-muted animate-pulse" />)}</div></div></div>}>
+          <NewestSection />
+        </Suspense>
+        <Suspense fallback={null}>
+          <CategoriesSection />
+        </Suspense>
         <CollectionBanners />
         <VideoSection />
         <FeaturedBanner />

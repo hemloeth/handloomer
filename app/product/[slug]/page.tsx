@@ -1,3 +1,4 @@
+import { cache, Suspense } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { ProductDetails } from "@/components/products/product-details"
@@ -18,7 +19,7 @@ interface Props {
   params: Promise<{ slug: string }>
 }
 
-async function getProduct(slug: string): Promise<Product | null> {
+const getProduct = cache(async (slug: string): Promise<Product | null> => {
   // Extract SKU from the end of the URL slug (e.g., name-slug-SKU)
   const parts = slug.split('-');
   const sku = parts[parts.length - 1];
@@ -36,7 +37,7 @@ async function getProduct(slug: string): Promise<Product | null> {
   });
 
   return product || null;
-}
+})
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -92,13 +93,8 @@ export default async function ProductPage({ params }: Props) {
   if (!product) {
     notFound()
   }
-
-  // Fetch only related products efficiently
-  const relatedResponse = await fetchPaginatedProducts({ category: product.category, limit: 5 });
-  const relatedProducts = relatedResponse.products
-    .filter(p => p.id !== product.id)
-    .slice(0, 4);
-
+  // Product core streams first; Related fetches behind Suspense so it
+  // never blocks image/price/CTA rendering.
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -129,6 +125,13 @@ export default async function ProductPage({ params }: Props) {
     })
   }
 
+  async function RelatedSection() {
+    const p = product as Product
+    const relatedResponse = await fetchPaginatedProducts({ category: p.category, limit: 5 });
+    const relatedProducts = relatedResponse.products.filter(x => x.id !== p.id).slice(0, 4);
+    return <RelatedProducts products={relatedProducts} category={p.category} />
+  }
+
   return (
     <main className="min-h-screen">
       <Header />
@@ -142,7 +145,9 @@ export default async function ProductPage({ params }: Props) {
           <ProductReviews productId={product.id} productName={product.name} />
         </div>
 
-        <RelatedProducts products={relatedProducts} category={product.category} />
+        <Suspense fallback={<div className="py-16 text-center text-muted-foreground">Loading related products…</div>}>
+          <RelatedSection />
+        </Suspense>
       </div>
 
       <Footer />

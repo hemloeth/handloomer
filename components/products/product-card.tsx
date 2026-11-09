@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Heart, ShoppingBag, Check } from "lucide-react"
@@ -9,28 +9,40 @@ import { useWishlist } from "@/context/wishlist-context"
 import { StarRating } from "@/components/common/star-rating"
 import type { Product } from "@/lib/products"
 import { cn } from "@/lib/utils"
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
-import { optimizeCloudinaryUrl } from "@/lib/cloudinary-utils"
 import { resolveMediaUrl } from "@/lib/media"
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-  type CarouselApi,
-} from "@/components/ui/carousel"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
 interface ProductCardProps {
   product: Product
   className?: string
 }
 
-export function ProductCard({ product, className }: ProductCardProps) {
+const CARD_SIZES = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+
+// Intent-based prefetch: Link renders prefetch={false} until hover/focus/touch,
+// then Next prefetches only that product (deduped by Next). Native <Link>,
+// so modifier-click / new-tab still works; no preventDefault.
+function ProductLink({ href, className, children, onMouseEnter, onMouseLeave, onFocus, onBlur }: { href: string; className?: string; children: React.ReactNode; onMouseEnter?: () => void; onMouseLeave?: () => void; onFocus?: () => void; onBlur?: () => void }) {
+  const [intent, setIntent] = useState(false)
+  const combine = (a?: () => void) => () => { setIntent(true); a?.() }
+  return (
+    <Link href={href} className={className} prefetch={intent ? undefined : false} onMouseEnter={combine(onMouseEnter)} onMouseLeave={onMouseLeave} onFocus={combine(onFocus)} onBlur={onBlur} onTouchStart={() => setIntent(true)}>
+      {children}
+    </Link>
+  )
+}
+
+export function CardImage({ src, alt, eager }: { src: string; alt: string; eager?: boolean }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <span className="relative block w-full aspect-[500/650] bg-muted overflow-hidden">
+      <Image src={src} alt={alt} width={500} height={650} sizes={CARD_SIZES} loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} onLoad={() => setLoaded(true)} className={`w-full h-auto block transition-all duration-500 ${loaded ? "opacity-100" : "opacity-0"} group-hover:scale-105`} />
+      {!loaded && <span className="absolute inset-0 bg-muted animate-pulse" aria-hidden="true" />}
+    </span>
+  )
+}
+
+export function ProductCard({ product, className, eager = false }: ProductCardProps & { eager?: boolean }) {
   const { addToCart } = useCart()
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist()
-  const [api, setApi] = useState<CarouselApi>()
   const [isAdded, setIsAdded] = useState(false)
   const [mounted, setMounted] = useState(false)
  
@@ -60,96 +72,22 @@ export function ProductCard({ product, className }: ProductCardProps) {
     }
   }
 
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-
-  const handleNavigate = (e: React.MouseEvent) => {
-    e.preventDefault()
-    startTransition(() => {
-      router.push(`/product/${product.slug}`)
-    })
-  }
+  const [hovered, setHovered] = useState(false)
+  const secondImage = product.images?.[1]
 
   return (
     <div className={cn("group relative w-full max-w-[280px] mx-auto", className)}>
       <div className="relative w-full mb-4">
         <div className="relative overflow-hidden rounded-sm">
-          {isPending && (
-            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/50 backdrop-blur-sm">
-              <LoadingSpinner size="md" />
-            </div>
-          )}
-          {(product.images && product.images.length > 1) || (product.videos && product.videos.length > 0) ? (
-            <Carousel
-              className="w-full h-full group/carousel"
-              setApi={setApi}
-              opts={{ loop: true }}
-            >
-              <CarouselContent className="-ml-0 h-full">
-                {product.images.map((img, index) => (
-                  <CarouselItem key={index} className="pl-0 basis-full">
-                    <Link href={`/product/${product.slug}`} className="block w-full h-full" onClick={handleNavigate}>
-                      <Image
-                        src={img ? optimizeCloudinaryUrl(img) : "/placeholder.svg"}
-                        alt={`${product.name} - Image ${index + 1}`}
-                        width={500}
-                        height={650}
-                        className="w-full h-auto block transition-transform duration-500 group-hover:scale-105"
-                      />
-                    </Link>
-                  </CarouselItem>
-                ))}
-                
-                {product.videos && product.videos.length > 0 && product.videos.map((vid, index) => (
-                  <CarouselItem key={`vid-${index}`} className="pl-0 basis-full">
-                    <Link href={`/product/${product.slug}`} className="block w-full h-full bg-muted/20" onClick={handleNavigate}>
-                      <video
-                        src={resolveMediaUrl(vid)}
-                        poster={product.image ? resolveMediaUrl(product.image) : undefined}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        preload="metadata"
-                        disablePictureInPicture
-                        disableRemotePlayback
-                        className="w-full h-full object-cover block transition-transform duration-500 group-hover:scale-105"
-                        style={{ aspectRatio: '500/650' }}
-                      />
-                    </Link>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 bg-background/80 hover:bg-background border-none"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  api?.scrollPrev();
-                }}
-              />
-              <CarouselNext
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 bg-background/80 hover:bg-background border-none"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  api?.scrollNext();
-                }}
-              />
-            </Carousel>
-          ) : (
-            <Link href={`/product/${product.slug}`} className="block w-full" onClick={handleNavigate}>
-              <Image
-                src={product.image ? optimizeCloudinaryUrl(product.image) : "/placeholder.svg"}
-                alt={product.name}
-                width={500}
-                height={650}
-                className="w-full h-auto block transition-transform duration-500 group-hover:scale-105"
-              />
-            </Link>
-          )}
-
-          {/* Badges - Removed NEW, percentage is highlighted below */}
+          <ProductLink href={`/product/${product.slug}`} className="block w-full" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onFocus={() => setHovered(true)} onBlur={() => setHovered(false)}>
+            <CardImage src={product.image || "/placeholder.svg"} alt={product.name} eager={eager} />
+            {secondImage && hovered && (
+              <span className="absolute inset-0">
+                <CardImage src={secondImage} alt={`${product.name} alternate view`} />
+              </span>
+            )}
+          </ProductLink>
+          {/* Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-2 z-20 pointer-events-none">
             {outOfStock && (
               <span className="bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded-sm uppercase tracking-wider backdrop-blur-sm shadow-sm hidden md:inline-block">
@@ -180,7 +118,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
         </div>
       </div >
 
-      <Link href={`/product/${product.slug}`} className="block" onClick={handleNavigate}>
+      <ProductLink href={`/product/${product.slug}`} className="block">
         <h3 className="font-medium text-xs md:text-sm leading-tight mb-1 md:mb-2 group-hover:text-primary transition-colors line-clamp-2">
           {product.name}
         </h3>
@@ -209,7 +147,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
             </>
           )}
         </div>
-      </Link>
+      </ProductLink>
 
       <div className="flex gap-1.5 md:gap-2 h-9 md:h-10">
         <button

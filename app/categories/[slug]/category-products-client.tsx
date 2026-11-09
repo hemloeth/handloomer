@@ -54,6 +54,12 @@ export function CategoryProductsClient({
     router.push(`?${params.toString()}`, { scroll: false })
   }
 
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("page", String(p))
+    return `?${params.toString()}`
+  }
+
   const handleFiltersChange = (newFilters: FilterOptions) => {
     updateUrl({
       category: newFilters.categories?.join(','),
@@ -114,45 +120,31 @@ export function CategoryProductsClient({
           {initialProducts.length > 0 ? (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
-              {initialProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+              {initialProducts.map((product, i) => (
+                <ProductCard key={product.id} product={product} eager={i < 4} />
               ))}
             </div>
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls — native Links so Next prefetches next/prev */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-4 mt-12 pt-8 border-t border-border">
-                <button
-                  onClick={() => {
-                    updateUrl({ page: String(currentPage - 1) })
-                    const grid = document.getElementById('products-grid');
-                    if (grid) {
-                      const y = grid.getBoundingClientRect().top + window.scrollY - 140;
-                      window.scrollTo({ top: y, behavior: 'instant' });
-                    }
-                  }}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 text-sm font-medium border border-border rounded-md disabled:opacity-50 hover:bg-muted hover:text-foreground transition-colors bg-background cursor-pointer disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
+                {currentPage > 1 ? (
+                  <Link href={pageHref(currentPage - 1)} className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted hover:text-foreground transition-colors bg-background">
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="px-4 py-2 text-sm font-medium border border-border rounded-md opacity-50 bg-background">Previous</span>
+                )}
                 <span className="text-sm text-muted-foreground font-medium">
                   Page <span className="text-foreground">{currentPage}</span> of {totalPages}
                 </span>
-                <button
-                  onClick={() => {
-                    updateUrl({ page: String(currentPage + 1) })
-                    const grid = document.getElementById('products-grid');
-                    if (grid) {
-                      const y = grid.getBoundingClientRect().top + window.scrollY - 140;
-                      window.scrollTo({ top: y, behavior: 'instant' });
-                    }
-                  }}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 text-sm font-medium border border-border rounded-md disabled:opacity-50 hover:bg-muted hover:text-foreground transition-colors bg-background cursor-pointer disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+                {currentPage < totalPages ? (
+                  <Link href={pageHref(currentPage + 1)} className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted hover:text-foreground transition-colors bg-background">
+                    Next
+                  </Link>
+                ) : (
+                  <span className="px-4 py-2 text-sm font-medium border border-border rounded-md opacity-50 bg-background">Next</span>
+                )}
               </div>
             )}
           </>
