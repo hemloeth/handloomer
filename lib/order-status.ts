@@ -73,14 +73,14 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     }
   }
 
-  // Logistics (canonical delivery.status) — RTO never becomes Delivered.
+  // Logistics (canonical delivery.status)  RTO never becomes Delivered.
   const rawStatus = (order.status || '').toLowerCase()
   const deliveryStatus = ((order as any).delivery?.status || "").toString().toLowerCase()
   const RTO_LABELS: Record<string, string> = {
-    undelivered: "Undelivered — Delivery Attempt Failed",
+    undelivered: "Delivery Attempt Failed",
     rto_initiated: "Return Initiated",
     rto_in_transit: "Returning to Seller",
-    rto_out_for_delivery: "RTO Out for Delivery",
+    rto_out_for_delivery: "Return Out for Delivery",
     rto_delivered: "Returned to Seller",
     lost: "Package Lost",
     damaged: "Package Damaged",
@@ -103,6 +103,19 @@ export function resolveCustomerOrderStatus(order: MinimalOrderState | null | und
     order.cancellationSummary?.status === 'completed' ||
     order.cancellation?.status === 'completed'
 
+  if (rtoLabel) {
+    return {
+      key: "returned",
+      label: rtoLabel,
+      badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
+      iconName: "package",
+      description: "Your parcel is being returned to our seller.",
+      canResumePayment: false,
+      canCancel: false,
+      isPendingPayment: false,
+      isTerminal: false,
+    }
+  }
   const refundStatus = (order.refundSummary?.status || order.refund?.status || '').toLowerCase()
 
   if (isCancellationRequested) {
