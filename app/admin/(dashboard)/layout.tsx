@@ -6,7 +6,6 @@ import { AdminSidebar } from "@/components/admin/sidebar"
 import { AdminHeader } from "@/components/admin/header"
 import { PageTransition } from "@/components/admin/page-transition"
 import { CategoryProvider } from "@/context/category-context"
-import { ProductProvider } from "@/context/product-context"
 import { BlogProvider } from "@/context/blog-context"
 import { apiGet, clearAdminToken } from "@/lib/api"
 import { Loader2, ShieldAlert } from "lucide-react"
@@ -96,7 +95,6 @@ export default function AdminLayout({
 
     return (
         <CategoryProvider>
-            <ProductProvider>
                 <BlogProvider>
                     <div className="min-h-screen bg-muted/40" data-admin-root="true">
                         <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -114,7 +112,6 @@ export default function AdminLayout({
                         </div>
                     </div>
                 </BlogProvider>
-            </ProductProvider>
         </CategoryProvider>
     )
 }

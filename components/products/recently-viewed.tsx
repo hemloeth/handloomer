@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { ProductCard } from "@/components/products/product-card"
 import type { Product } from "@/lib/products"
-import { apiGet } from "@/lib/api"
+import { apiPost } from "@/lib/api"
 
 const KEY = "handloomer_recently_viewed_v1"
 const MAX = 12

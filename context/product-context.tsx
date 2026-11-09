@@ -99,6 +99,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     const [error, setError] = useState<string | null>(null)
     const pathname = usePathname()
     const isAdminArea = pathname?.startsWith("/admin") ?? false
+    const consumesGlobalCatalog = !isAdminArea;
 
     // Stale-time + race/dedupe guards. Backend stays no-store; stale-time
     // only gates whether a network request is sent. Background refreshes
@@ -122,7 +123,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         if (isBackground) setIsRefreshing(true)
         const run = (async () => {
             try {
-                const data = await apiGet('/api/product/allproducts?limit=100&fullData=true', { cache: 'no-store' })
+                const data = await apiGet('/api/product/allproducts?limit=100&fullData=false', { cache: 'no-store' })
                 // Only latest fetch may update state (slow A cannot beat fast B).
                 if (generation !== generationRef.current) return
                 if (data?.products) {
@@ -147,7 +148,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     // Initial sync (only when no fresh SSR seed), focus/visibility re-sync
     // when stale, admin polling (forced, 20s), and route-entry freshness.
     useEffect(() => {
-        if (lastFetchedAtRef.current === 0) {
+        if (lastFetchedAtRef.current === 0 && consumesGlobalCatalog) {
             void fetchProducts()
         }
         const handleFocus = () => {
@@ -160,14 +161,12 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         }
         window.addEventListener("focus", handleFocus)
         document.addEventListener("visibilitychange", handleVisibilityChange)
-        let intervalId: NodeJS.Timeout | null = null
-        if (isAdminArea) {
-            intervalId = setInterval(() => { void fetchProducts({ force: true }) }, 20000)
-        }
+        // No global polling. Admin real-time needs live on their own screens
+        // (Products page fetches its own page); focus/visibility + stale-time
+        // cover tab returns without 20s hammering.
         return () => {
             window.removeEventListener("focus", handleFocus)
             document.removeEventListener("visibilitychange", handleVisibilityChange)
-            if (intervalId) clearInterval(intervalId)
             // Discard in-flight result after unmount.
             generationRef.current++
         }

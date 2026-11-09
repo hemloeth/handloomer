@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { useBlog } from "@/context/blog-context"
+import { toast } from "sonner"
 import { Trash2 } from "lucide-react"
 import { resolveMediaUrl } from "@/lib/media"
 import { sanitizeBlogHtml } from "@/lib/sanitize-html"
@@ -43,7 +44,7 @@ function BlogPageContent() {
         e.preventDefault()
 
         if (!image) {
-            alert("Please select a featured image from the Media Library first.")
+            toast.error("Please select a featured image from the Media Library first.")
             return
         }
 
@@ -61,17 +62,16 @@ function BlogPageContent() {
             if (typeof window !== "undefined") {
                 window.localStorage.removeItem("blogSelectedImage")
             }
-            alert("Blog post added successfully!")
+            toast.success("Blog post added successfully!")
         } catch (error) {
             console.error(error)
-            alert("Failed to add blog post.")
+            toast.error("Failed to add blog post.")
         }
     }
 
     const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this blog post?")) {
-            await deleteBlog(id)
-        }
+        await deleteBlog(id)
+        toast.success("Blog post deleted")
     }
 
     return (
