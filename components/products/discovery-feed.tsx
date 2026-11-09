@@ -2,71 +2,54 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ProductCard, CardImage } from "@/components/products/product-card"
+import { ProductCard } from "@/components/products/product-card"
 import type { Product } from "@/lib/products"
 import { apiGet } from "@/lib/api"
-
-type Discovery = { products: Product[]; nextCursor: string | null; hasMore: boolean }
 
 export const DISCOVERY_BATCH = 8
 
 // Continuous discovery: small batches, cursor pagination, IntersectionObserver
-// sentinel (500px lookahead), single-flight + AbortController, lightweight
-// cards only. First batch streams in a Suspense boundary so ProductDetails
-// never waits for it.
-export function DiscoveryFeed({ productId, productSlug }: { productId: string; productSlug?: string }) {
+// sentinel (600px lookahead), single-flight + generation guard (apiGet has no
+// AbortSignal), lightweight cards only. First batch streams behind Suspense
+// so ProductDetails never waits for it.
+export function DiscoveryFeed({ productId }: { productId: string; productSlug?: string }) {
   const [products, setProducts] = useState<Product[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(true)
   const [failed, setFailed] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
   const seenRef = useRef<Set<string>>(new Set([productId]))
+  const cursorRef = useRef<string | null>(null)
+  const hasMoreRef = useRef(true)
+  const loadingRef = useRef(false)
+  const generationRef = useRef(0)
 
   // Reset when navigating A → B (new feed, no A leakage).
   useEffect(() => {
+    generationRef.current += 1
     seenRef.current = new Set([productId])
+    cursorRef.current = null
+    hasMoreRef.current = true
+    loadingRef.current = true
     setProducts([])
-    setNextCursor(null)
     setHasMore(true)
     setIsLoadingMore(true)
     setFailed(false)
-    abortRef.current?.abort()
   }, [productId, retryKey])
 
-  useEffect(() => {
-    if (!hasMore || isLoadingMore) return
-    const el = sentinelRef.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          loadMore()
-        }
-      },
-      { rootMargin: "600px 0px" }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMore, isLoadingMore, nextCursor, productId])
-
   const loadMore = async () => {
-    if (isLoadingMore && products.length > 0) return
-    if (!hasMore) return
-    abortRef.current?.abort()
-    const ctl = new AbortController()
-    abortRef.current = ctl
+    if (loadingRef.current || !hasMoreRef.current) return
+    loadingRef.current = true
     setIsLoadingMore(true)
+    const generation = generationRef.current
     try {
-      const cursor = nextCursor
+      const cursor = cursorRef.current
       const url = `/api/product/recommendations/${productId}?limit=${DISCOVERY_BATCH}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
       const data = await apiGet(url)
-      if (ctl.signal.aborted) return
+      // Navigated away / reset while in flight: discard late response.
+      if (generation !== generationRef.current) return
       if (!data.success || !Array.isArray(data.products)) throw new Error(data.message || "Failed to load")
-      // Lightweight card → Product shape. alternateImage becomes images[1].
       const mapped: Product[] = data.products
         .filter((d: any) => !seenRef.current.has(String(d._id)))
         .map((d: any) => {
@@ -95,24 +78,42 @@ export function DiscoveryFeed({ productId, productSlug }: { productId: string; p
           }
         })
       setProducts((prev) => [...prev, ...mapped])
-      setNextCursor(data.nextCursor ?? null)
-      setHasMore(Boolean(data.hasMore))
+      cursorRef.current = data.nextCursor ?? null
+      hasMoreRef.current = Boolean(data.hasMore)
+      setHasMore(hasMoreRef.current)
     } catch {
-      if (ctl.signal.aborted) return
+      if (generation !== generationRef.current) return
       // Main product stays usable; only discovery shows retry.
       setFailed(true)
     } finally {
-      if (!ctl.signal.aborted) setIsLoadingMore(false)
+      if (generation !== generationRef.current) return
+      loadingRef.current = false
+      setIsLoadingMore(false)
     }
   }
 
+  // Keep a ref to the latest loader so the observer never uses stale cursor.
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+
   // Initial batch.
   useEffect(() => {
-    loadMore()
+    loadMoreRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, retryKey])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMoreRef.current()
+      },
+      { rootMargin: "600px 0px" }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, products.length])
 
   return (
     <section className="py-8 sm:py-16 bg-secondary">
@@ -130,17 +131,10 @@ export function DiscoveryFeed({ productId, productSlug }: { productId: string; p
           {products.map((p, i) => (
             <ProductCard key={p.id} product={p} eager={i < 4} />
           ))}
-          {isLoadingMore && products.length === 0 && (
+          {isLoadingMore && (
             <>
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="aspect-[500/650] bg-muted animate-pulse" />
-              ))}
-            </>
-          )}
-          {isLoadingMore && products.length > 0 && (
-            <>
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={`skel-${i}`} className="aspect-[500/650] bg-muted animate-pulse" />
               ))}
             </>
           )}
