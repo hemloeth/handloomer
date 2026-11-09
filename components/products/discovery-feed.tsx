@@ -31,7 +31,7 @@ export function DiscoveryFeed({ productId }: { productId: string; productSlug?: 
     seenRef.current = new Set([productId])
     cursorRef.current = null
     hasMoreRef.current = true
-    loadingRef.current = true
+    loadingRef.current = false
     setProducts([])
     setHasMore(true)
     setIsLoadingMore(true)
