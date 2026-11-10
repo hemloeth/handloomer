@@ -873,3 +873,61 @@ export function resolveOrderActions(order: any): CustomerOrderActions {
   };
 }
 
+export const CANONICAL_DELIVERY_LABELS: Record<string, string> = {
+  pending: "Order Confirmed",
+  picked_up: "Picked Up",
+  shipped: "Shipped",
+  in_transit: "In Transit",
+  out_for_delivery: "Out for Delivery",
+  delivered: "Delivered",
+  undelivered: "Delivery Attempt Failed",
+  rto_initiated: "Return Initiated",
+  rto_in_transit: "Returning to Seller",
+  rto_out_for_delivery: "Return Out for Delivery",
+  rto_delivered: "Returned to Seller",
+  lost: "Package Lost",
+  damaged: "Package Damaged",
+  cancelled: "Cancelled",
+};
+
+export function getCanonicalDeliveryLabel(status: string | null | undefined): string {
+  const s = String(status || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+  return CANONICAL_DELIVERY_LABELS[s] ?? "Order Confirmed";
+}
+
+export function getCanonicalDeliveryBadgeClass(status: string | null | undefined): string {
+  const s = String(status || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+  if (s === "delivered") {
+    return "bg-emerald-100 text-emerald-800 border-emerald-300/40 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800";
+  }
+  if (["lost", "damaged", "cancelled"].includes(s)) {
+    return "bg-rose-100 text-rose-800 border-rose-300/50 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800";
+  }
+  if (["undelivered", "rto_initiated", "rto_in_transit", "rto_out_for_delivery", "rto_delivered"].includes(s)) {
+    return "bg-amber-100 text-amber-900 border-amber-300/50 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800";
+  }
+  return "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800";
+}
+
+export const CANON_DELIVERY_STEPS: Record<string, number> = {
+  pending: 0,
+  picked_up: 2,
+  shipped: 2,
+  in_transit: 3,
+  out_for_delivery: 4,
+  delivered: 5,
+  undelivered: 1,
+  rto_initiated: 1,
+  rto_in_transit: 1,
+  rto_out_for_delivery: 1,
+  rto_delivered: 1,
+  lost: 1,
+  damaged: 1,
+  cancelled: 1,
+};
+
+export function getActiveStepIndex(status: string | null | undefined): number {
+  const s = String(status || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+  return CANON_DELIVERY_STEPS[s] ?? 0;
+}
+

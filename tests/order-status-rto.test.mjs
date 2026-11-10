@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveCustomerOrderStatus, resolveOrderActions, resolveProductPreviews } from "../lib/order-status.ts";
+import { 
+  resolveCustomerOrderStatus, 
+  resolveOrderActions, 
+  resolveProductPreviews,
+  getCanonicalDeliveryLabel,
+  getCanonicalDeliveryBadgeClass,
+  getActiveStepIndex
+} from "../lib/order-status.ts";
 
 const paid = { status: "shipped", payment: { method: "prepaid", status: "paid" }, delivery: { status: "in_transit" } };
 
@@ -89,4 +96,49 @@ test("resolveOrderActions canonical logistics actions", () => {
   });
   assert.equal(rtoActions.canTrack, true);
   assert.equal(rtoActions.canCancel, false);
+});
+
+test("Track order visual badge class semantics", () => {
+  // delivered -> green / success
+  const deliveredClass = getCanonicalDeliveryBadgeClass("delivered");
+  assert.match(deliveredClass, /emerald/);
+
+  // undelivered -> warning / not green
+  const undeliveredClass = getCanonicalDeliveryBadgeClass("undelivered");
+  assert.doesNotMatch(undeliveredClass, /emerald/);
+  assert.match(undeliveredClass, /amber/);
+
+  // rto_delivered -> return state / not green
+  const rtoDeliveredClass = getCanonicalDeliveryBadgeClass("rto_delivered");
+  assert.doesNotMatch(rtoDeliveredClass, /emerald/);
+  assert.match(rtoDeliveredClass, /amber/);
+
+  // damaged / lost / cancelled -> red/rose
+  const damagedClass = getCanonicalDeliveryBadgeClass("damaged");
+  assert.match(damagedClass, /rose/);
+  assert.doesNotMatch(damagedClass, /emerald/);
+
+  const lostClass = getCanonicalDeliveryBadgeClass("lost");
+  assert.match(lostClass, /rose/);
+
+  const cancelledClass = getCanonicalDeliveryBadgeClass("cancelled");
+  assert.match(cancelledClass, /rose/);
+
+  // in_transit / shipped / pending -> active / neutral (blue)
+  const inTransitClass = getCanonicalDeliveryBadgeClass("in_transit");
+  assert.match(inTransitClass, /blue/);
+  assert.doesNotMatch(inTransitClass, /emerald/);
+
+  // Labels
+  assert.equal(getCanonicalDeliveryLabel("undelivered"), "Delivery Attempt Failed");
+  assert.equal(getCanonicalDeliveryLabel("rto_delivered"), "Returned to Seller");
+  assert.equal(getCanonicalDeliveryLabel("delivered"), "Delivered");
+
+  // Step indices
+  assert.equal(getActiveStepIndex("delivered"), 5);
+  assert.equal(getActiveStepIndex("out_for_delivery"), 4);
+  assert.equal(getActiveStepIndex("in_transit"), 3);
+  assert.equal(getActiveStepIndex("shipped"), 2);
+  assert.equal(getActiveStepIndex("undelivered"), 1);
+  assert.equal(getActiveStepIndex("rto_delivered"), 1);
 });

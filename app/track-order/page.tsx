@@ -22,6 +22,11 @@ import {
 } from 'lucide-react';
 import { resolveMediaUrl } from '@/lib/media';
 import { toast } from 'sonner';
+import { 
+  getCanonicalDeliveryLabel, 
+  getCanonicalDeliveryBadgeClass, 
+  getActiveStepIndex 
+} from '@/lib/order-status';
 
 function TrackOrderContent() {
   const searchParams = useSearchParams();
@@ -176,24 +181,11 @@ function TrackOrderContent() {
     { key: 'delivered', label: 'Delivered', desc: 'Handover complete' },
   ];
 
-  // Canonical delivery.status only  never parse raw provider strings.
-  // Undelivered/RTO map to their own steps (never 5=Delivered).
-  const CANON_STEP = { pending: 0, picked_up: 2, shipped: 2, in_transit: 3, out_for_delivery: 4, delivered: 5, undelivered: 1, rto_initiated: 1, rto_in_transit: 1, rto_out_for_delivery: 1, rto_delivered: 1 } as const;
-  const getActiveStepIndex = (statusStr: string) => {
-    const s = String(statusStr).toLowerCase().trim().replace(/[\s-]+/g, "_");
-    return (CANON_STEP as any)[s] ?? 0;
-  };
-
   const trackedOrder = trackingResult?.order;
   const canonicalDelivery = trackedOrder?.delivery?.status || trackedOrder?.status || "";
   const currentStepIndex = getActiveStepIndex(canonicalDelivery);
-  const _consumed = trackedOrder
-  const DELIVERY_LABELS: Record<string, string> = { pending: "Order Confirmed", picked_up: "Picked Up", shipped: "Shipped", in_transit: "In Transit", out_for_delivery: "Out for Delivery", delivered: "Delivered", undelivered: "Delivery Attempt Failed", rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "Return Out for Delivery", rto_delivered: "Returned to Seller", lost: "Package Lost", damaged: "Package Damaged", cancelled: "Cancelled" };
-  const canonicalBadgeClass = canonicalDelivery === "delivered" ? "bg-emerald-600 text-white" : (["undelivered","lost","damaged","cancelled"].includes(canonicalDelivery) ? "bg-rose-100 text-rose-700" : (["rto_initiated","rto_in_transit","rto_out_for_delivery","rto_delivered"].includes(canonicalDelivery) ? "bg-amber-100 text-amber-800" : "bg-stone-900 text-white"));
-  const canonicalStatusLabel = DELIVERY_LABELS[canonicalDelivery] ?? "Order Confirmed";
-  const isUndelivered = canonicalDelivery === "undelivered";
-  const rtoLabels: Record<string, string> = { rto_initiated: "Return Initiated", rto_in_transit: "Returning to Seller", rto_out_for_delivery: "RTO Out for Delivery", rto_delivered: "Returned to Seller" };
-  const rtoLabel = rtoLabels[canonicalDelivery];
+  const canonicalBadgeClass = getCanonicalDeliveryBadgeClass(canonicalDelivery);
+  const canonicalStatusLabel = getCanonicalDeliveryLabel(canonicalDelivery);
 
   return (
     <div className="min-h-screen bg-[#faf8f5] dark:bg-[#121212] text-foreground">
@@ -202,9 +194,7 @@ function TrackOrderContent() {
       {/* Hero Header */}
       <div className="relative pt-[104px] lg:pt-[120px] pb-12 bg-gradient-to-b from-stone-100 to-[#faf8f5] dark:from-stone-900/60 dark:to-[#121212] border-b border-border/50">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center">
-          {isUndelivered && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">Delivery Attempt Failed  Undelivered</span>}
-          {rtoLabel && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-100 text-amber-800 mb-3">{rtoLabel}</span>}
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm ${canonicalBadgeClass}`}>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm bg-stone-900 text-white dark:bg-stone-800 dark:text-stone-200 border border-stone-700/50">
             <Truck className="w-3.5 h-3.5 text-amber-300" />
             Shiprocket Live Tracker
           </span>
@@ -332,8 +322,16 @@ function TrackOrderContent() {
                 {/* Left Info: Status & Courier */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border flex items-center gap-1.5 ${canonicalBadgeClass}`}>
+                      <span className={`w-2 h-2 rounded-full animate-ping ${
+                        canonicalDelivery === 'delivered'
+                          ? 'bg-emerald-500'
+                          : ['lost', 'damaged', 'cancelled'].includes(canonicalDelivery)
+                          ? 'bg-rose-500'
+                          : ['undelivered', 'rto_initiated', 'rto_in_transit', 'rto_out_for_delivery', 'rto_delivered'].includes(canonicalDelivery)
+                          ? 'bg-amber-500'
+                          : 'bg-blue-500'
+                      }`} />
                       {canonicalStatusLabel}
                     </span>
                     {courierName && (
