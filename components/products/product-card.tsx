@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Heart, ShoppingBag, Check } from "lucide-react"
@@ -10,9 +10,12 @@ import { StarRating } from "@/components/common/star-rating"
 import type { Product } from "@/lib/products"
 import { cn } from "@/lib/utils"
 import { resolveMediaUrl } from "@/lib/media"
+import { useProductCardGallery } from "./product-card-gallery"
+
 interface ProductCardProps {
   product: Product
   className?: string
+  eager?: boolean
 }
 
 const CARD_SIZES = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -30,21 +33,39 @@ function ProductLink({ href, className, children, onMouseEnter, onMouseLeave, on
   )
 }
 
-export function CardImage({ src, alt, eager }: { src: string; alt: string; eager?: boolean }) {
+export function CardImage({ src, alt, eager, className, onLoad }: { src: string; alt: string; eager?: boolean; className?: string; onLoad?: () => void }) {
   const [loaded, setLoaded] = useState(false)
   return (
     <span className="relative block w-full aspect-[500/650] bg-muted overflow-hidden">
-      <Image src={src} alt={alt} width={500} height={650} sizes={CARD_SIZES} loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} onLoad={() => setLoaded(true)} className={`w-full h-auto block transition-all duration-500 ${loaded ? "opacity-100" : "opacity-0"} group-hover:scale-105`} />
+      <Image
+        src={resolveMediaUrl(src)}
+        alt={alt}
+        width={500}
+        height={650}
+        sizes={CARD_SIZES}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
+        onLoad={() => {
+          setLoaded(true)
+          onLoad?.()
+        }}
+        className={cn(
+          "w-full h-auto block transition-all duration-500 group-hover:scale-105",
+          loaded ? "opacity-100" : "opacity-0",
+          className
+        )}
+      />
       {!loaded && <span className="absolute inset-0 bg-muted animate-pulse" aria-hidden="true" />}
     </span>
   )
 }
 
-export function ProductCard({ product, className, eager = false }: ProductCardProps & { eager?: boolean }) {
+export function ProductCard({ product, className, eager = false }: ProductCardProps) {
   const { addToCart } = useCart()
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist()
   const [isAdded, setIsAdded] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [initialLoaded, setInitialLoaded] = useState(false)
  
   useEffect(() => {
     setMounted(true)
@@ -72,20 +93,72 @@ export function ProductCard({ product, className, eager = false }: ProductCardPr
     }
   }
 
-  const [hovered, setHovered] = useState(false)
-  const secondImage = product.images?.[1]
+  // All unique product images eligible for hover cycle
+  const allImages = useMemo(() => {
+    const list = [product.image, ...(product.images || [])].filter((url): url is string => Boolean(url && typeof url === "string"))
+    return Array.from(new Set(list))
+  }, [product.image, product.images])
+
+  const {
+    currentSrc,
+    incomingSrc,
+    isFading,
+    onHoverStart,
+    onHoverEnd,
+  } = useProductCardGallery({ images: allImages })
 
   return (
     <div className={cn("group relative w-full max-w-[280px] mx-auto", className)}>
       <div className="relative w-full mb-4">
         <div className="relative overflow-hidden rounded-sm">
-          <ProductLink href={`/product/${product.slug}`} className="block w-full" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} onFocus={() => setHovered(true)} onBlur={() => setHovered(false)}>
-            <CardImage src={product.image || "/placeholder.svg"} alt={product.name} eager={eager} />
-            {secondImage && hovered && (
-              <span className="absolute inset-0">
-                <CardImage src={secondImage} alt={`${product.name} alternate view`} />
-              </span>
-            )}
+          <ProductLink
+            href={`/product/${product.slug}`}
+            className="block w-full"
+            onMouseEnter={onHoverStart}
+            onMouseLeave={onHoverEnd}
+            onFocus={onHoverStart}
+            onBlur={onHoverEnd}
+          >
+            <span className="relative block w-full aspect-[500/650] bg-muted overflow-hidden">
+              {/* Base Image Layer (stays visible throughout hover transitions) */}
+              <Image
+                src={resolveMediaUrl(currentSrc || "/placeholder.svg")}
+                alt={product.name}
+                width={500}
+                height={650}
+                sizes={CARD_SIZES}
+                loading={eager ? "eager" : "lazy"}
+                fetchPriority={eager ? "high" : "auto"}
+                onLoad={() => setInitialLoaded(true)}
+                className={cn(
+                  "w-full h-auto block object-cover transition-all duration-500 group-hover:scale-105",
+                  initialLoaded ? "opacity-100" : "opacity-0"
+                )}
+              />
+
+              {/* Incoming Image Layer (cross-fades over base image without any blank frame) */}
+              {incomingSrc && (
+                <span className="absolute inset-0 pointer-events-none">
+                  <Image
+                    src={resolveMediaUrl(incomingSrc)}
+                    alt={`${product.name} alternate view`}
+                    width={500}
+                    height={650}
+                    sizes={CARD_SIZES}
+                    loading="eager"
+                    className={cn(
+                      "w-full h-auto block object-cover group-hover:scale-105 transition-transform duration-500 transition-opacity duration-300 ease-in-out",
+                      isFading ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </span>
+              )}
+
+              {/* Initial skeleton only before main image has first loaded */}
+              {!initialLoaded && (
+                <span className="absolute inset-0 bg-muted animate-pulse pointer-events-none" aria-hidden="true" />
+              )}
+            </span>
           </ProductLink>
           {/* Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-2 z-20 pointer-events-none">

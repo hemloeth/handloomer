@@ -121,6 +121,13 @@ describe("Pagination, scroll, forms, navigation", () => {
     assert.match(src, /totalProducts/);
     assert.match(src, /\/api\/product\/allproducts\?/);
     assert.doesNotMatch(src, /products\.filter/);
+    assert.doesNotMatch(src, /refreshProducts/);
+    assert.match(src, /loadPageProducts/);
+    assert.match(src, /clearAdminCache\(\)/);
+  });
+  test("category client does not duplicate Color sort option", () => {
+    const src = read("app/categories/[slug]/category-products-client.tsx");
+    assert.doesNotMatch(src, /Color:\s*Color/);
   });
   test("number inputs use native scrolling (no wheel-blur interruption)", () => {
     for (const f of ["app/admin/(dashboard)/add-product/page.tsx", "app/admin/(dashboard)/edit-product/[id]/page.tsx"]) {

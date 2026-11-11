@@ -135,7 +135,6 @@ export function CategoryProductsClient({
                 <option value="newest">Newest First</option>
                 <option value="name-asc">Name: A to Z</option>
                 <option value="name-desc">Name: Z to A</option>
-                <option value="color-asc">Color: Color</option>
                 <option value="color-asc">Color: A to Z</option>
                 <option value="color-desc">Color: Z to A</option>
               </select>
@@ -239,7 +238,6 @@ export function CategoryProductsClient({
                 { value: "newest", label: "Newest First" },
                 { value: "name-asc", label: "Name: A to Z" },
                 { value: "name-desc", label: "Name: Z to A" },
-                { value: "color-asc", label: "Color: Color" },
                 { value: "color-asc", label: "Color: A to Z" },
                 { value: "color-desc", label: "Color: Z to A" },
               ].map((opt) => (

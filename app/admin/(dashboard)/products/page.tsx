@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -32,7 +32,7 @@ import { QuickSaleModal } from "@/components/admin/quick-sale-modal"
 let toastId = 0
 
 export default function AdminProductsPage() {
-  const { refreshProducts, deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
+  const { deleteProduct, deleteMultipleProducts, quickUpdateProduct } = useProducts()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [page, setPage] = useState(1)
@@ -47,24 +47,35 @@ export default function AdminProductsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    try {
-      await refreshProducts?.()
-      showToast("Refreshed", "Product catalog and stock up to date", "success")
-    } finally {
-      setIsRefreshing(false)
-    }
+  const showToast = useCallback((title: string, message: string, type: 'success' | 'error' = 'success') => {
+    const id = ++toastId
+    setToasts((prev) => [...prev, { id, title, message, type }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, 3000)
+  }, [])
+
+  const dismissToast = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
-  // Backend pagination/search/filter (full catalog, not global-100).
-  // Previous page stays visible during fetch; latest wins via generation.
-  useEffect(() => {
-    let cancelled = false
-    const gen = { value: 0 }
-    const load = async () => {
-      const myGen = ++gen.value
+  // Unified page loader for initial/effect load and manual refresh
+  const genRef = useRef(0)
+  const inflightRef = useRef<Promise<boolean> | null>(null)
+
+  const loadPageProducts = useCallback(async (options?: { isManualRefresh?: boolean }): Promise<boolean> => {
+    if (inflightRef.current) return inflightRef.current
+
+    const isManual = options?.isManualRefresh ?? false
+    if (isManual) {
+      setIsRefreshing(true)
+      clearAdminCache()
+    } else {
       setIsLoadingPage(true)
+    }
+
+    const myGen = ++genRef.current
+    const run = (async () => {
       try {
         const { apiGet } = await import("@/lib/api")
         const q = new URLSearchParams({
@@ -75,25 +86,59 @@ export default function AdminProductsPage() {
         if (searchTerm.trim()) q.set("search", searchTerm.trim())
         if (activeTab === "sale") q.set("isOnSale", "true")
         const data = await apiGet(`/api/product/allproducts?${q.toString()}`)
-        if (cancelled || myGen !== gen.value) return
+        if (myGen !== genRef.current) return false
+
         if (data?.success && data.products) {
           setPageProducts(data.products)
-          setTotalProducts(data.pagination?.totalProducts ?? data.products.length)
-          setTotalPages(data.pagination?.totalPages ?? 1)
+          const total = data.pagination?.totalProducts ?? data.products.length
+          const pages = data.pagination?.totalPages ?? 1
+          setTotalProducts(total)
+          setTotalPages(pages)
           if (page === 1 && !searchTerm.trim() && activeTab === "all") {
-            setAdminCache("admin:products:first", { products: data.products, totalProducts: data.pagination?.totalProducts ?? data.products.length, totalPages: data.pagination?.totalPages ?? 1 })
+            setAdminCache("admin:products:first", {
+              products: data.products,
+              totalProducts: total,
+              totalPages: pages
+            })
           }
+          if (isManual) {
+            showToast("Refreshed", "Product catalog and stock up to date", "success")
+          }
+          return true
+        } else {
+          throw new Error(data?.message || "Failed to load products")
         }
       } catch (err: any) {
-        if (cancelled) return
-        showToast("Load failed", err?.message || "Could not load products", "error")
+        if (myGen !== genRef.current) return false
+        showToast(isManual ? "Refresh failed" : "Load failed", err?.message || "Could not load products", "error")
+        return false
       } finally {
-        if (!cancelled) setIsLoadingPage(false)
+        if (myGen === genRef.current) {
+          inflightRef.current = null
+          if (isManual) {
+            setIsRefreshing(false)
+          }
+          setIsLoadingPage(false)
+        }
       }
+    })()
+
+    inflightRef.current = run
+    return run
+  }, [page, searchTerm, activeTab, showToast])
+
+  // Backend pagination/search/filter (full catalog, not global-100).
+  // Previous page stays visible during fetch; latest wins via generation.
+  useEffect(() => {
+    void loadPageProducts()
+    return () => {
+      genRef.current++
     }
-    load()
-    return () => { cancelled = true }
-  }, [page, searchTerm, activeTab])
+  }, [loadPageProducts])
+
+  const handleRefresh = async () => {
+    await loadPageProducts({ isManualRefresh: true })
+  }
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [updatingField, setUpdatingField] = useState<string | null>(null)
   const [activeSaleProduct, setActiveSaleProduct] = useState<any | null>(null)
@@ -126,18 +171,6 @@ export default function AdminProductsPage() {
     if (stock === 0) return "Out of Stock"
     if (stock <= 5) return "Low Stock"
     return "In Stock"
-  }
-
-  const showToast = (title: string, message: string, type: 'success' | 'error' = 'success') => {
-    const id = ++toastId
-    setToasts((prev) => [...prev, { id, title, message, type }])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 3000)
-  }
-
-  const dismissToast = (id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
   // Single delete

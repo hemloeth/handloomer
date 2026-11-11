@@ -194,69 +194,67 @@ describe("ProductProvider freshness", () => {
     });
   }
 
-  test("Fresh provider (SSR seed, 5s old) does not fetch on route return", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
+  test("Provider does not automatically fetch on mount or route changes (targeted fetching)", async () => {
     let calls = 0;
     globalThis.fetch = async () => { calls++; return jsonResponse({ success: true, products: [] }); };
-    const { rerender } = await renderProvider([ssrSeed("a", "A Saree", 2000)]);
-    // SSR seed counts as fresh at mount: no immediate client fetch.
+    const { rerender } = await renderProvider([]);
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
-    assert.equal(calls, 0, "fresh SSR seed must not trigger immediate fetch");
-    // 5s later, return to home — still fresh.
-    Date.now = () => t0 + 5000;
+    assert.equal(calls, 0, "empty provider must not trigger automatic fetch on mount");
+
     navMock.__setPathname("/collections");
     rerender();
+    navMock.__setPathname("/categories/linen");
+    rerender();
+    navMock.__setPathname("/");
+    rerender();
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
-    assert.equal(calls, 0, "5s-old data must not refetch");
+    assert.equal(calls, 0, "storefront route changes must not trigger global catalog fetch");
+
+    globalThis.window.dispatchEvent(new globalThis.Event("focus"));
+    globalThis.document.dispatchEvent(new globalThis.Event("visibilitychange"));
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    assert.equal(calls, 0, "window focus / visibility change must not trigger global fetch");
   });
 
-  test("Stale provider (2min old) refreshes on route return, keeps old visible until new arrives", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
+  test("Explicit refreshProducts() fetches and updates catalog, keeps old visible during fetch", async () => {
     let calls = 0;
     let resolveFetch;
     globalThis.fetch = () => {
       calls++;
       return new Promise((res) => { resolveFetch = () => res(jsonResponse({ success: true, products: [mkDb("c", "C Saree", 2200), mkDb("a", "A Saree", 2000)] })); });
     };
-    const { result, rerender } = await renderProvider([ssrSeed("a", "A Saree", 2000)]);
+    const { result } = await renderProvider([ssrSeed("a", "A Saree", 2000)]);
     assert.equal(result.current.mappedProducts[0].name, "A Saree");
-    Date.now = () => t0 + 120000;
-    navMock.__setPathname("/collections");
-    rerender();
-    // Fetch in flight, old visible.
+    
+    let refreshPromise;
+    act(() => {
+      refreshPromise = result.current.refreshProducts({ force: true });
+    });
     assert.equal(result.current.mappedProducts[0].name, "A Saree", "old must stay during background fetch");
-    await act(async () => { resolveFetch(); await new Promise(r => setTimeout(r, 50)); });
+    await act(async () => { resolveFetch(); await refreshPromise; });
     assert.equal(calls, 1);
     assert.equal(result.current.mappedProducts[0].name, "C Saree", "new data replaces old");
   });
 
-  test("New + updated products flow through provider refresh (C,A,B + price 1800)", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
+  test("New + updated products flow through explicit provider refresh (C,A,B + price 1800)", async () => {
     let phase = 0;
     globalThis.fetch = async () => {
       phase++;
       if (phase === 1) return jsonResponse({ success: true, products: [mkDb("a", "A Saree", 2000), mkDb("b", "B Saree", 1800)] });
       return jsonResponse({ success: true, products: [mkDb("c", "C Saree", 2200), mkDb("a", "A Saree", 1800), mkDb("b", "B Saree", 1800)] });
     };
-    // No SSR seed => initial fetch runs.
     const { result } = await renderProvider([]);
-    await waitFor(() => assert.equal(result.current.mappedProducts.length, 2));
+    assert.equal(result.current.mappedProducts.length, 0);
+
+    await act(async () => { await result.current.refreshProducts({ force: true }); });
     assert.deepEqual(result.current.mappedProducts.map(p => p.name), ["A Saree", "B Saree"]);
-    Date.now = () => t0 + 120000;
-    await act(async () => { await result.current.refreshProducts(); });
-    // refreshProducts is stale-guarded; force via time + route is covered elsewhere.
-    // Here stale window passed, so refresh runs.
-    await waitFor(() => assert.equal(result.current.mappedProducts.length, 3));
+
+    await act(async () => { await result.current.refreshProducts({ force: true }); });
     assert.deepEqual(result.current.mappedProducts.map(p => p.name), ["C Saree", "A Saree", "B Saree"]);
     assert.equal(result.current.mappedProducts.find(p => p.name === "A Saree").price, 1800);
   });
 
-  test("Duplicate simultaneous triggers (focus + visibility) share one inflight fetch", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
+  test("Simultaneous explicit refresh calls share one inflight fetch", async () => {
     let calls = 0;
     let resolveFetch;
     globalThis.fetch = () => {
@@ -264,20 +262,17 @@ describe("ProductProvider freshness", () => {
       return new Promise((res) => { resolveFetch = () => res(jsonResponse({ success: true, products: [mkDb("n", "N Saree", 1500)] })); });
     };
     const { result } = await renderProvider([]);
-    // initial fetch inflight; simulate focus+visibility now.
-    await act(async () => {
-      globalThis.window.dispatchEvent(new globalThis.Event("focus"));
-      globalThis.document.dispatchEvent(new globalThis.Event("visibilitychange"));
-      await new Promise(r => setTimeout(r, 30));
+    let p1, p2;
+    act(() => {
+      p1 = result.current.refreshProducts({ force: true });
+      p2 = result.current.refreshProducts({ force: true });
     });
-    assert.equal(calls, 1, "focus+visibility must dedupe to 1 network call");
-    await act(async () => { resolveFetch(); await new Promise(r => setTimeout(r, 50)); });
+    assert.equal(calls, 1, "simultaneous calls must dedupe to 1 network call");
+    await act(async () => { resolveFetch(); await Promise.all([p1, p2]); });
     assert.equal(result.current.mappedProducts[0].name, "N Saree");
   });
 
   test("Overlapping refresh calls cannot let an older slower response overwrite newer", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
     let calls = 0;
     let resolvers = [];
     globalThis.fetch = () => {
@@ -285,22 +280,21 @@ describe("ProductProvider freshness", () => {
       return new Promise((res) => { resolvers.push(() => res(jsonResponse({ success: true, products: [mkDb("s", `S${calls} Saree`, 1000 + calls)] }))); });
     };
     const { result } = await renderProvider([]);
-    // initial fetch (call 1) pending; a second refresh must reuse it, not start call 2.
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    let p1, p2;
+    act(() => {
+      p1 = result.current.refreshProducts({ force: true });
+    });
     const before = calls;
-    // refreshProducts while inflight returns same promise (no new network call).
-    let p2;
-    act(() => { p2 = result.current.refreshProducts(); });
+    act(() => {
+      p2 = result.current.refreshProducts({ force: true });
+    });
     assert.equal(calls, before, "inflight reuse must not start a second call");
-    await act(async () => { resolvers[0](); await new Promise(r => setTimeout(r, 50)); });
-    // Latest (single) response wins; no older overwrite possible.
+    await act(async () => { resolvers[0](); await Promise.all([p1, p2]); });
     assert.ok(result.current.mappedProducts.length === 1);
     assert.equal(result.current.mappedProducts[0].name, "S1 Saree");
   });
 
   test("Failed background refresh keeps valid catalog (no wipe)", async () => {
-    const t0 = 1_700_000_000_000;
-    Date.now = () => t0;
     let phase = 0;
     globalThis.fetch = async () => {
       phase++;
@@ -308,10 +302,11 @@ describe("ProductProvider freshness", () => {
       return jsonResponse({ success: false, message: "Bad request" }, 400);
     };
     const { result } = await renderProvider([]);
-    await waitFor(() => assert.equal(result.current.mappedProducts.length, 1));
+    await act(async () => { await result.current.refreshProducts({ force: true }); });
+    assert.equal(result.current.mappedProducts.length, 1);
     assert.equal(result.current.mappedProducts[0].name, "A Saree");
-    Date.now = () => t0 + 120000;
-    await act(async () => { await result.current.refreshProducts(); });
+
+    await act(async () => { await result.current.refreshProducts({ force: true }); });
     assert.equal(result.current.mappedProducts.length, 1);
     assert.equal(result.current.mappedProducts[0].name, "A Saree", "valid data must survive failed refresh");
   });

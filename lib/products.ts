@@ -130,14 +130,10 @@ export function mapProductFromDB(dbProduct: any): Product {
   };
 }
 
-// Seed for the global provider: first `limit` newest products
-// (`createdAt` DESC, backend default). This is NOT the complete catalog —
-// full-catalog pages MUST use `fetchPaginatedProducts` (or the client
-// variant) with explicit page/limit + filters so catalogs >100 work.
-//
-// Card/list payload is intentionally light: list projection excludes
-// full specs; gallery is trimmed to main + first alternate for hover.
-// Product detail always fetches the single full product separately.
+// List/card payload is intentionally lightweight:
+// - list endpoint: light product fields + mainImage + all gallery image URLs
+//   (used by ProductCard for full hover gallery cycling without heavy image metadata).
+// - detail endpoint: full product + full gallery metadata + full specifications.
 export async function fetchProductsFromDB(limit: number = 100): Promise<Product[]> {
   try {
     const { apiServerGet } = await import("@/lib/api");

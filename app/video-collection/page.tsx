@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation"
 import { ShoppingBag, Heart, Play, Pause, ChevronLeft, ChevronRight } from "lucide-react"
 import { useCart } from "@/context/cart-context"
 import { useWishlist } from "@/context/wishlist-context"
-import { useProducts } from "@/context/product-context"
 import { fetchPaginatedProductsClient, type Product } from "@/lib/products"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -30,7 +29,6 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
   const [isPlaying, setIsPlaying] = useState(false)
   const { addToCart } = useCart()
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist()
-  const { mappedProducts } = useProducts()
 
   // 1. Observer for playing/pausing when visible
   const { ref: inViewRef, inView } = useInView({
@@ -197,7 +195,6 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
 }
 
 function VideoCollectionContent() {
-  const { mappedProducts } = useProducts()
   const [videoProducts, setVideoProducts] = useState<Product[]>([])
   const [loadingVideos, setLoadingVideos] = useState(true)
   const searchParams = useSearchParams()

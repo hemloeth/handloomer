@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from "react"
-import { usePathname } from 'next/navigation'
 import {
     type Product as FrontendProduct,
     type FilterOptions,
@@ -100,24 +99,23 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     const [loading, setLoading] = useState(false)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const pathname = usePathname()
-    const isAdminArea = pathname?.startsWith("/admin") ?? false
-    const isInfoRoute = pathname ? ["/about", "/contact", "/privacy", "/terms", "/faq", "/shipping-policy", "/return-policy"].some(p => pathname.startsWith(p)) : false
-    const consumesGlobalCatalog = !isAdminArea && !isInfoRoute;
 
     // Stale-time + race/dedupe guards. Backend stays no-store; stale-time
-    // only gates whether a network request is sent. Background refreshes
-    // never clear `products` (list stays visible); a failed refresh keeps
-    // valid catalog + logs (error surfaced, no UI wipe).
+    // only gates whether a network request is sent when explicitly requested.
+    // Background refreshes never clear `products` (list stays visible); a
+    // failed refresh keeps valid catalog + logs (error surfaced, no UI wipe).
     const lastFetchedAtRef = useRef<number>(initialProducts.length > 0 ? Date.now() : 0)
     const generationRef = useRef(0)
     const inflightRef = useRef<Promise<void> | null>(null)
 
+    // Catalog reads happen ONLY when a consumer explicitly requests them (e.g. via refreshProducts).
+    // Storefront pages fetch their own targeted data (homepage, categories, collections, etc.);
+    // do NOT automatically download 100 products globally on mount, route change, focus, or visibility change.
     const fetchProducts = useCallback(async (options?: { force?: boolean }) => {
         const force = options?.force ?? false
-        // Dedupe simultaneous triggers (focus + visibility + route).
+        // Dedupe simultaneous triggers
         if (inflightRef.current) return inflightRef.current
-        // Skip when data is fresh (SSR seed counts as fresh at mount).
+        // Skip when data is fresh
         if (!force && Date.now() - lastFetchedAtRef.current < PRODUCT_STALE_TIME_MS) {
             return
         }
@@ -147,41 +145,14 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         })()
         inflightRef.current = run
         return run
-    }, [])
+    }, [products.length, ssrProducts.length])
 
-    // Initial sync (only when no fresh SSR seed), focus/visibility re-sync
-    // when stale, admin polling (forced, 20s), and route-entry freshness.
+    // Cleanup in-flight requests on unmount
     useEffect(() => {
-        if (lastFetchedAtRef.current === 0 && consumesGlobalCatalog) {
-            void fetchProducts()
-        }
-        const handleFocus = () => {
-            void fetchProducts()
-        }
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                void fetchProducts()
-            }
-        }
-        window.addEventListener("focus", handleFocus)
-        document.addEventListener("visibilitychange", handleVisibilityChange)
-        // No global polling. Admin real-time needs live on their own screens
-        // (Products page fetches its own page); focus/visibility + stale-time
-        // cover tab returns without 20s hammering.
         return () => {
-            window.removeEventListener("focus", handleFocus)
-            document.removeEventListener("visibilitychange", handleVisibilityChange)
-            // Discard in-flight result after unmount.
             generationRef.current++
         }
-    }, [isAdminArea, fetchProducts])
-
-    // Returning to a catalog route with stale provider data refreshes.
-    // Shared with focus/visibility via stale-time + inflight guards.
-    useEffect(() => {
-        if (!consumesGlobalCatalog) return
-        void fetchProducts()
-    }, [pathname, fetchProducts, consumesGlobalCatalog])
+    }, [])
 
     const addProduct = async (formData: FormData): Promise<Product | null> => {
         setLoading(true)
