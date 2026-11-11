@@ -22,11 +22,13 @@ export default async function CollectionsPage({ searchParams }: { searchParams: 
   })
 
   // Fetch marketing collection names for the filter bar
-  const colRes = await apiServerGet('/api/marketing-collections')
+  const colRes = await apiServerGet('/api/marketing-collections').catch(() => ({ success: false, data: [] }))
   // Marketing collection tabs only — 'new-arrivals' is a standalone page reached
   // from the header nav, not a curated collection, so it's excluded here to keep
   // the switcher consistent (every remaining tab always shows the tab bar).
-  const marketingCols = colRes.success ? colRes.data.filter((c: any) => c.key !== 'none' && c.key !== 'new-arrivals') : []
+  const marketingCols = colRes?.success && Array.isArray(colRes.data)
+    ? colRes.data.filter((c: any) => c.key !== 'none' && c.key !== 'new-arrivals')
+    : []
 
   return (
     <main className="min-h-screen">

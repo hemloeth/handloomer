@@ -289,57 +289,12 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
         )
     }
 
-    // Map the raw DB products to the frontend expected format
     // Map the raw DB products to the frontend expected format using the canonical mapper
     const mappedProducts = useMemo(() => {
         if (products.length === 0 && ssrProducts.length > 0) {
             return ssrProducts;
         }
 
-        return products.map(dbProduct => {
-            const isVideoStr = typeof dbProduct.videoFile === "string" || typeof dbProduct.videoUrl === "string";
-            const liveStock = typeof dbProduct.stock === 'number' ? dbProduct.stock : (dbProduct.stock ? Number(dbProduct.stock) : 0);
-            return {
-                id: dbProduct._id.toString(),
-                sku: dbProduct.sku,
-                name: dbProduct.name,
-                slug: dbProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-                category: dbProduct.category,
-                categorySlug: dbProduct.category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-                price: dbProduct.price,
-                originalPrice: dbProduct.regularPrice || dbProduct.price,
-                image: dbProduct.mainImage,
-                images: [
-                    dbProduct.mainImage,
-                    ...(dbProduct.galleryImages ? dbProduct.galleryImages.map((img: any) => img.url) : [])
-                ].filter(Boolean),
-                videos: isVideoStr ? [dbProduct.videoFile || dbProduct.videoUrl].filter(Boolean) : [],
-                description: dbProduct.shortDescription || "",
-                details: [
-                    dbProduct.material ? `Material: ${dbProduct.material}` : "",
-                    dbProduct.sareeSize ? `Saree Size: ${dbProduct.sareeSize}` : "",
-                    dbProduct.blouseSize ? `Blouse Size: ${dbProduct.blouseSize}` : "",
-                    dbProduct.washCare ? `Care: ${dbProduct.washCare}` : ""
-                ].filter(Boolean),
-                fabric: dbProduct.material || "Linen",
-                color: dbProduct.color || "Multicolor",
-                isOnSale: dbProduct.isOnSale,
-                isFestive: dbProduct.isFestive,
-                isFeatured: true, // Mocked for now
-                isNew: dbProduct.isNewArrival,
-                material: dbProduct.material,
-                sareeSize: dbProduct.sareeSize,
-                blouseSize: dbProduct.blouseSize,
-                washCare: dbProduct.washCare,
-                dispatch: dbProduct.dispatch,
-                disclaimer: dbProduct.disclaimer,
-                internationalNote: dbProduct.internationalNote,
-                stock: liveStock,
-                productCollection: dbProduct.productCollection || 
-                                 (dbProduct.isFestive ? "festive" : 
-                                  dbProduct.isOnSale ? "big-sale" : "none")
-            } as FrontendProduct;
-        })
         return products.map(mapProductFromDB);
     }, [products, ssrProducts]);
 

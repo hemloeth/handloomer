@@ -78,11 +78,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
                     priceMax,
                     isOnSale,
                     isFeatured,
-                }
-                if (key === "new-arrivals") {
-                    query.isNewArrival = "true"
-                } else {
-                    query.productCollection = key
+                    productCollection: key,
                 }
                 const { products: mapped, pagination: pag } = await fetchPaginatedProductsClient(query)
                 setProducts(mapped || [])

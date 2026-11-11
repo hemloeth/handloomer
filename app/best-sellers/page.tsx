@@ -47,8 +47,9 @@ export default async function BestSellersPage({ searchParams }: BestSellersPageP
   let displayProducts = paginatedProducts
   let currentPagination = pagination
   if (!displayProducts || displayProducts.length === 0) {
+    const { isBestSeller: _discard, ...fallbackParams } = (resolvedSearchParams || {})
     const featuredRes = await fetchPaginatedProducts({
-      ...resolvedSearchParams,
+      ...fallbackParams,
       sortBy: "featured",
       limit: 20
     })
