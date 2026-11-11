@@ -6,24 +6,43 @@ import { ProductCard } from "@/components/products/product-card"
 import type { Product } from "@/lib/products"
 import { apiGet } from "@/lib/api"
 
-export const DISCOVERY_BATCH = 8
+export const DESKTOP_MAX_ITEMS = 20
+export const MOBILE_MAX_ITEMS = 10
 
-// Continuous discovery: small batches, cursor pagination, IntersectionObserver
-// sentinel (600px lookahead), single-flight + generation guard (apiGet has no
-// AbortSignal), lightweight cards only. First batch streams behind Suspense
-// so ProductDetails never waits for it.
+// Discovery recommendations: limited to 20 products on desktop and 10 on mobile.
+// No continuous/infinite fetching of the entire catalog on the product page.
+// Single-flight + generation guard, lightweight cards only.
 export function DiscoveryFeed({ productId }: { productId: string; productSlug?: string }) {
   const [products, setProducts] = useState<Product[]>([])
+  const [maxLimit, setMaxLimit] = useState(DESKTOP_MAX_ITEMS)
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(true)
   const [failed, setFailed] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const seenRef = useRef<Set<string>>(new Set([productId]))
   const cursorRef = useRef<string | null>(null)
   const hasMoreRef = useRef(true)
   const loadingRef = useRef(false)
   const generationRef = useRef(0)
+  const maxLimitRef = useRef(DESKTOP_MAX_ITEMS)
+
+  // Detect responsive limit: 10 on mobile (<768px), 20 on desktop
+  useEffect(() => {
+    const computeLimit = () => (window.innerWidth < 768 ? MOBILE_MAX_ITEMS : DESKTOP_MAX_ITEMS)
+    const limit = computeLimit()
+    setMaxLimit(limit)
+    maxLimitRef.current = limit
+
+    const onResize = () => {
+      const next = computeLimit()
+      if (next !== maxLimitRef.current) {
+        maxLimitRef.current = next
+        setMaxLimit(next)
+      }
+    }
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
 
   // Reset when navigating A → B (new feed, no A leakage).
   useEffect(() => {
@@ -40,12 +59,13 @@ export function DiscoveryFeed({ productId }: { productId: string; productSlug?: 
 
   const loadMore = async () => {
     if (loadingRef.current || !hasMoreRef.current) return
+    const limitTarget = maxLimitRef.current
     loadingRef.current = true
     setIsLoadingMore(true)
     const generation = generationRef.current
     try {
       const cursor = cursorRef.current
-      const url = `/api/product/recommendations/${productId}?limit=${DISCOVERY_BATCH}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
+      const url = `/api/product/recommendations/${productId}?limit=${limitTarget}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`
       const data = await apiGet(url)
       // Navigated away / reset while in flight: discard late response.
       if (generation !== generationRef.current) return
@@ -77,10 +97,19 @@ export function DiscoveryFeed({ productId }: { productId: string; productSlug?: 
             totalReviews: d.numReviews || 0,
           }
         })
-      setProducts((prev) => [...prev, ...mapped])
+      
+      let nextTotal = 0
+      setProducts((prev) => {
+        const combined = [...prev, ...mapped]
+        nextTotal = combined.length
+        return combined.slice(0, limitTarget)
+      })
+
       cursorRef.current = data.nextCursor ?? null
-      hasMoreRef.current = Boolean(data.hasMore)
-      setHasMore(hasMoreRef.current)
+      // Stop requesting once we reach limitTarget (10 on mobile, 20 on desktop) or backend runs out
+      const stillHasMore = Boolean(data.hasMore) && nextTotal < limitTarget
+      hasMoreRef.current = stillHasMore
+      setHasMore(stillHasMore)
     } catch {
       if (generation !== generationRef.current) return
       // Main product stays usable; only discovery shows retry.
@@ -92,28 +121,17 @@ export function DiscoveryFeed({ productId }: { productId: string; productSlug?: 
     }
   }
 
-  // Keep a ref to the latest loader so the observer never uses stale cursor.
+  // Keep a ref to the latest loader
   const loadMoreRef = useRef(loadMore)
   loadMoreRef.current = loadMore
 
-  // Initial batch.
+  // Initial load when productId, retryKey, or limit target initializes
   useEffect(() => {
     loadMoreRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, retryKey])
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el || !hasMore) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMoreRef.current()
-      },
-      { rootMargin: "600px 0px" }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [hasMore, products.length])
+  const visibleProducts = products.slice(0, maxLimit)
 
   return (
     <section className="py-8 sm:py-16 bg-secondary">
@@ -128,25 +146,24 @@ export function DiscoveryFeed({ productId }: { productId: string; productSlug?: 
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
-          {products.map((p, i) => (
+          {visibleProducts.map((p, i) => (
             <ProductCard key={p.id} product={p} eager={i < 4} />
           ))}
           {isLoadingMore && (
             <>
-              {Array.from({ length: 4 }).map((_, i) => (
+              {Array.from({ length: Math.min(4, maxLimit) }).map((_, i) => (
                 <div key={i} className="aspect-[500/650] bg-muted animate-pulse" />
               ))}
             </>
           )}
         </div>
-        <div ref={sentinelRef} className="h-2" />
         {failed && !isLoadingMore && (
           <div className="text-center py-8">
             <p className="text-sm text-muted-foreground mb-3">Couldn&apos;t load more sarees.</p>
             <button onClick={() => { setFailed(false); setRetryKey((k) => k + 1) }} className="text-sm underline">Retry</button>
           </div>
         )}
-        {!hasMore && products.length > 0 && !isLoadingMore && (
+        {!hasMore && visibleProducts.length > 0 && !isLoadingMore && (
           <p className="text-center text-xs text-muted-foreground py-8">You&apos;ve explored all matching sarees.</p>
         )}
       </div>
