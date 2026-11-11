@@ -17,7 +17,8 @@ import {
     filterProducts,
     sortProducts,
     PRODUCT_STALE_TIME_MS,
-    searchProducts
+    searchProducts,
+    mapProductFromDB
 } from "@/lib/products"
 import { apiGet, apiUpload, apiDelete, apiPut, apiPatch } from "@/lib/api"
 
@@ -56,6 +57,8 @@ interface Product {
     isOnSale: boolean
     isFestive: boolean
     isNewArrival: boolean
+    isFeatured?: boolean
+    isBestSeller?: boolean
     productCollection?: string
     createdAt: string
 }
@@ -65,7 +68,7 @@ interface ProductContextType {
     refreshProducts: () => Promise<void>
     addProduct: (formData: FormData) => Promise<Product | null>
     updateProduct: (id: string, formData: FormData) => Promise<Product | null>
-    quickUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>
+    quickUpdateProduct: (id: string, updates: Partial<Product>) => Promise<Product | any>
     uploadVideo: (productId: string, videoFile: File) => Promise<void>
     deleteProduct: (id: string) => Promise<void>
     deleteMultipleProducts: (ids: string[]) => Promise<number>
@@ -99,7 +102,8 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     const [error, setError] = useState<string | null>(null)
     const pathname = usePathname()
     const isAdminArea = pathname?.startsWith("/admin") ?? false
-    const consumesGlobalCatalog = !isAdminArea;
+    const isInfoRoute = pathname ? ["/about", "/contact", "/privacy", "/terms", "/faq", "/shipping-policy", "/return-policy"].some(p => pathname.startsWith(p)) : false
+    const consumesGlobalCatalog = !isAdminArea && !isInfoRoute;
 
     // Stale-time + race/dedupe guards. Backend stays no-store; stale-time
     // only gates whether a network request is sent. Background refreshes
@@ -175,8 +179,9 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     // Returning to a catalog route with stale provider data refreshes.
     // Shared with focus/visibility via stale-time + inflight guards.
     useEffect(() => {
+        if (!consumesGlobalCatalog) return
         void fetchProducts()
-    }, [pathname, fetchProducts])
+    }, [pathname, fetchProducts, consumesGlobalCatalog])
 
     const addProduct = async (formData: FormData): Promise<Product | null> => {
         setLoading(true)
@@ -231,6 +236,13 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
             setProducts((prev) =>
                 prev.map((p) => (p._id === id ? data.product : p))
             )
+            if (data?.product) {
+                setProducts((prev) =>
+                    prev.map((p) => (p._id === id ? data.product : p))
+                )
+                return data.product
+            }
+            return data
         } catch (err: any) {
             console.error("Quick update failed", err)
             throw err
@@ -278,6 +290,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
     }
 
     // Map the raw DB products to the frontend expected format
+    // Map the raw DB products to the frontend expected format using the canonical mapper
     const mappedProducts = useMemo(() => {
         if (products.length === 0 && ssrProducts.length > 0) {
             return ssrProducts;
@@ -327,6 +340,7 @@ export function ProductProvider({ children, initialProducts = [] }: { children: 
                                   dbProduct.isOnSale ? "big-sale" : "none")
             } as FrontendProduct;
         })
+        return products.map(mapProductFromDB);
     }, [products, ssrProducts]);
 
     return (

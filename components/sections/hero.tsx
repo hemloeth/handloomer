@@ -74,7 +74,7 @@ export function Hero() {
   const activeSlides = slides.length > 0 ? slides : [
     {
       _id: "default",
-      image: "/images/hero-saree.jpg",
+      image: "/images/festive-collection-hero.jpg",
       title: "Timeless Elegance\\nin Every Thread",
       subtitle: "Discover our exquisite collection",
       description: "Handcrafted linen sarees, where traditional craftsmanship meets contemporary design.",

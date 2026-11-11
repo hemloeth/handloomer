@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import Link from "next/link"
+import { useSearchParams, redirect } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { apiGet } from "@/lib/api"
@@ -10,7 +11,6 @@ import Image from "next/image"
 import { motion } from "framer-motion"
 import { Sparkles, ShoppingBag, Star } from "lucide-react"
 import { fetchPaginatedProductsClient, categories } from "@/lib/products"
-import { redirect } from "next/navigation"
 import { CategoryProductsClient } from "../../categories/[slug]/category-products-client"
 import { Suspense } from "react"
 
@@ -28,7 +28,9 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
 
     const [collection, setCollection] = useState<any>(null)
     const [products, setProducts] = useState<any[]>([])
+    const [pagination, setPagination] = useState<any>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const searchParams = useSearchParams()
 
     useEffect(() => {
         const fetchData = async () => {
@@ -42,11 +44,11 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
                     }
                 } catch (colErr) {
                     const fallbacks: Record<string, any> = {
-                        'new-arrivals': { key: 'new-arrivals', name: 'New Arrivals', title1: 'Just', title2: 'Dropped', description: 'Explore our latest additions.', image: '/images/celebrity-look.jpg', stats: [] },
-                        'festive': { key: 'festive', name: 'Festive Collection', title1: 'Festive', title2: 'Special', description: 'Perfect sarees for your celebrations.', image: '/images/bridal-saree.jpg', stats: [] },
-                        'big-sale': { key: 'big-sale', name: 'Big Sale', title1: 'Clearance', title2: 'Sale', description: 'Incredible discounts on premium sarees.', image: '/images/designer-saree.jpg', stats: [] },
-                        'celebrity': { key: 'celebrity', name: 'Celebrity Looks', title1: 'Celebrity', title2: 'Style', description: 'Sarees inspired by the stars.', image: '/images/celebrity-collection.png', stats: [] },
-                        'sale': { key: 'sale', name: 'Sale', title1: 'On', title2: 'Sale', description: 'Discounted items.', image: '/images/designer-saree.jpg', stats: [] }
+                        'new-arrivals': { key: 'new-arrivals', name: 'New Arrivals', title1: 'Just', title2: 'Dropped', description: 'Explore our latest additions.', image: '/images/celebrity-star-banner.jpg', stats: [] },
+                        'festive': { key: 'festive', name: 'Festive Collection', title1: 'Festive', title2: 'Special', description: 'Perfect sarees for your celebrations.', image: '/images/festive-collection-hero.jpg', stats: [] },
+                        'big-sale': { key: 'big-sale', name: 'Big Sale', title1: 'Clearance', title2: 'Sale', description: 'Incredible discounts on premium sarees.', image: '/images/big-sale-banner.jpg', stats: [] },
+                        'celebrity': { key: 'celebrity', name: 'Celebrity Looks', title1: 'Celebrity', title2: 'Style', description: 'Sarees inspired by the stars.', image: '/images/celebrity-linen-couture-banner.jpg', stats: [] },
+                        'sale': { key: 'sale', name: 'Sale', title1: 'On', title2: 'Sale', description: 'Discounted items.', image: '/images/big-sale-banner.jpg', stats: [] }
                     }
                     if (fallbacks[key]) {
                         setCollection(fallbacks[key])
@@ -56,13 +58,35 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
                     }
                 }
 
-                // Backend-driven filtering + createdAt ordering (no global-100
-                // then client filter). "New Arrivals" (explicit) = isNewArrival.
-                const query = key === "new-arrivals"
-                    ? { isNewArrival: "true", sortBy: "newest", limit: 100, page: 1 }
-                    : { productCollection: key, sortBy: "newest", limit: 100, page: 1 }
-                const { products: mapped } = await fetchPaginatedProductsClient(query)
-                setProducts(mapped)
+                // Backend-driven filtering + pagination + ordering
+                const page = searchParams.get('page') || '1'
+                const sortBy = searchParams.get('sortBy') || 'newest'
+                const color = searchParams.get('color') || undefined
+                const material = searchParams.get('material') || undefined
+                const priceMin = searchParams.get('priceMin') || undefined
+                const priceMax = searchParams.get('priceMax') || undefined
+                const isOnSale = searchParams.get('isOnSale') || undefined
+                const isFeatured = searchParams.get('isFeatured') || undefined
+
+                const query: Record<string, any> = {
+                    limit: 20,
+                    page,
+                    sortBy,
+                    color,
+                    material,
+                    priceMin,
+                    priceMax,
+                    isOnSale,
+                    isFeatured,
+                }
+                if (key === "new-arrivals") {
+                    query.isNewArrival = "true"
+                } else {
+                    query.productCollection = key
+                }
+                const { products: mapped, pagination: pag } = await fetchPaginatedProductsClient(query)
+                setProducts(mapped || [])
+                if (pag) setPagination(pag)
             } catch (error) {
                 console.error("Error fetching collection data:", error)
             } finally {
@@ -70,7 +94,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             }
         }
         fetchData()
-    }, [key])
+    }, [key, searchParams])
 
     // Fetch all marketing collections for the sub-nav
     const [allCollections, setAllCollections] = useState<any[]>([])
@@ -192,6 +216,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             <Suspense fallback={<div className="py-20 text-center">Loading products...</div>}>
                 <CategoryProductsClient
                     initialProducts={products}
+                    pagination={pagination}
                     pageTitle={collection.name}
                 />
             </Suspense>

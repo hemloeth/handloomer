@@ -10,6 +10,12 @@ import { Search, SlidersHorizontal, Sparkles, ShoppingBag } from "lucide-react"
 interface SearchResultsProps {
   products: Product[]
   query: string
+  pagination?: {
+    currentPage: number
+    totalPages: number
+    totalProducts: number
+  } | null
+  onPageChange?: (page: number) => void
   onSuggestionClick?: (suggestion: string) => void
   onFiltersChange?: (filters: FilterOptions, sortBy: SortOption) => void
 }
@@ -17,6 +23,8 @@ interface SearchResultsProps {
 export function SearchResults({ 
   products, 
   query, 
+  pagination,
+  onPageChange,
   onSuggestionClick,
   onFiltersChange 
 }: SearchResultsProps) {
@@ -87,7 +95,7 @@ export function SearchResults({
           {/* Results Count Bar on Desktop */}
           <div className="hidden lg:flex items-center justify-between pb-2 border-b border-border/60">
             <p className="text-sm text-muted-foreground">
-              Showing <strong className="text-foreground">{products.length}</strong> {products.length === 1 ? 'saree' : 'sarees'}
+              Showing <strong className="text-foreground">{products.length}</strong> of {pagination?.totalProducts ?? products.length} {products.length === 1 ? 'saree' : 'sarees'}
               {query && <span> for “<span className="text-primary font-medium">{query}</span>”</span>}
             </p>
           </div>
@@ -98,6 +106,31 @@ export function SearchResults({
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
+
+          {/* Pagination Controls */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 mt-8 pt-6 border-t border-border">
+              <button
+                type="button"
+                onClick={() => onPageChange?.(Math.max(1, (pagination.currentPage || 1) - 1))}
+                disabled={pagination.currentPage <= 1}
+                className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground">
+                Page <span className="font-semibold text-foreground">{pagination.currentPage}</span> of {pagination.totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPageChange?.(Math.min(pagination.totalPages, (pagination.currentPage || 1) + 1))}
+                disabled={pagination.currentPage >= pagination.totalPages}
+                className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )

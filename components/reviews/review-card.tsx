@@ -15,7 +15,7 @@ interface ReviewCardProps {
 
 export function ReviewCard({ review, className }: ReviewCardProps) {
   // helpful count or verification disabled for MVP
-  const userName = review.user?.name || "Anonymous"
+  const userName = review.user?.name || (review as any)?.userName || "Anonymous"
 
   return (
     <>

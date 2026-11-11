@@ -1,16 +1,24 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useProducts } from "@/context/product-context"
-import type { ImageInfo } from "@/context/product-context"
-import { Copy, Check, X, Save, Loader2, ImageIcon } from "lucide-react"
+import { apiGet, apiPut } from "@/lib/api"
+import { Copy, Check, X, Save, Loader2, ImageIcon, Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { resolveMediaUrl } from "@/lib/media"
+
+export interface ImageInfo {
+    url: string
+    title: string
+    description: string
+    alt: string
+    caption: string
+    tags?: string[]
+}
 
 interface SelectedImage {
     productId: string
@@ -22,16 +30,63 @@ interface SelectedImage {
 }
 
 function MediaPageContent() {
-    const { products, loading, updateGalleryImageInfo } = useProducts()
     const router = useRouter()
     const searchParams = useSearchParams()
     const selectMode = searchParams.get("select")
+
+    const [products, setProducts] = useState<any[]>([])
+    const [page, setPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const [totalProducts, setTotalProducts] = useState(0)
+    const [search, setSearch] = useState("")
+    const [searchInput, setSearchInput] = useState("")
+    const [loading, setLoading] = useState(true)
 
     const [selected, setSelected] = useState<SelectedImage | null>(null)
     const [editInfo, setEditInfo] = useState<ImageInfo>({ url: "", title: "", description: "", alt: "", caption: "" })
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [copied, setCopied] = useState(false)
+    const genRef = useRef(0)
+
+    useEffect(() => {
+        let cancelled = false
+        const currentGen = ++genRef.current
+        setLoading(true)
+
+        const fetchMedia = async () => {
+            try {
+                const q = new URLSearchParams({
+                    page: String(page),
+                    limit: "50",
+                })
+                if (search.trim()) q.set("search", search.trim())
+                const res = await apiGet(`/api/product/admin/media-library?${q.toString()}`)
+                if (cancelled || currentGen !== genRef.current) return
+                if (res.success) {
+                    setProducts(res.products || [])
+                    setTotalPages(res.pagination?.totalPages || 1)
+                    setTotalProducts(res.pagination?.totalProducts || 0)
+                }
+            } catch (err) {
+                if (cancelled || currentGen !== genRef.current) return
+                console.error("Failed to load admin media library:", err)
+            } finally {
+                if (!cancelled && currentGen === genRef.current) {
+                    setLoading(false)
+                }
+            }
+        }
+
+        fetchMedia()
+        return () => { cancelled = true }
+    }, [page, search])
+
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        setPage(1)
+        setSearch(searchInput.trim())
+    }
 
     const handleSelectImage = (image: string | undefined) => {
         if (!selectMode || !image) return
@@ -70,16 +125,21 @@ function MediaPageContent() {
         if (!selected) return
         setSaving(true); setSaved(false)
         try {
-            await updateGalleryImageInfo(selected.productId, selected.imageIndex, {
-                title: editInfo.title, description: editInfo.description, alt: editInfo.alt, caption: editInfo.caption,
+            await apiPut(`/api/product/${selected.productId}/gallery-image-info`, {
+                imageIndex: selected.imageIndex,
+                title: editInfo.title,
+                description: editInfo.description,
+                alt: editInfo.alt,
+                caption: editInfo.caption,
             })
             setSaved(true); setTimeout(() => setSaved(false), 2000)
-        } catch (err) { console.error("Failed to save", err) } finally { setSaving(false) }
+        } catch (err) { console.error("Failed to save image info", err) } finally { setSaving(false) }
     }
 
     if (loading) return <div className="p-8 text-center text-muted-foreground animate-pulse">Loading media...</div>
 
     // Build a flat list of ALL images (main + gallery) across all products
+    // Build a flat list of images (main + gallery) for the current page
     const allImages: SelectedImage[] = []
     products.forEach((product) => {
         // Main image
@@ -105,16 +165,31 @@ function MediaPageContent() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight font-serif text-primary">Media Library</h2>
-                    <p className="text-muted-foreground">
-                        {selectMode ? "Click an image to insert it." : "Click any image to view and edit its details."}
+                    <p className="text-muted-foreground text-sm">
+                        {selectMode ? "Click an image to insert it." : "Browse and edit media across your entire catalog."}
                     </p>
                 </div>
+                <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 max-w-sm w-full">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search by product name/SKU..."
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            className="pl-8 text-xs h-9"
+                        />
+                    </div>
+                    <Button type="submit" size="sm" variant="secondary" className="h-9 text-xs">Search</Button>
+                </form>
             </div>
 
-            {allImages.length === 0 ? (
+            {loading ? (
+                <div className="p-12 text-center text-muted-foreground animate-pulse">Loading catalog media...</div>
+            ) : allImages.length === 0 ? (
                 <Card>
                     <CardHeader><CardTitle className="text-base">No images found</CardTitle></CardHeader>
                     <CardContent><p className="text-sm text-muted-foreground">Upload products with images to see them here.</p></CardContent>
@@ -123,7 +198,7 @@ function MediaPageContent() {
                 <>
                     {/* Full-size Image Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {allImages.map((img, i) => {
+                        {allImages.map((img) => {
                             const isSelected = selected?.productId === img.productId && selected?.imageIndex === img.imageIndex && selected?.isMain === img.isMain
                             return (
                                 <div
@@ -150,6 +225,35 @@ function MediaPageContent() {
                             )
                         })}
                     </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t pt-4">
+                            <p className="text-xs text-muted-foreground">
+                                Page <span className="font-semibold text-foreground">{page}</span> of {totalPages} ({totalProducts} products)
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page <= 1}
+                                    className="h-8 gap-1 text-xs"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page >= totalPages}
+                                    className="h-8 gap-1 text-xs"
+                                >
+                                    Next <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Editor Panel — appears below when an image is clicked */}
                     {selected && (

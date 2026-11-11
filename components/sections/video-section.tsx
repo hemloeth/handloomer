@@ -5,7 +5,7 @@ import { useRef, useState, useEffect } from "react"
 import { Heart, ShoppingBag, Play, Pause } from "lucide-react"
 import { useCart } from "@/context/cart-context"
 import { useWishlist } from "@/context/wishlist-context"
-import { useProducts } from "@/context/product-context"
+import { fetchPaginatedProductsClient, type Product } from "@/lib/products"
 import { useInView } from "react-intersection-observer"
 import { optimizeCloudinaryUrl } from "@/lib/cloudinary-utils"
 import { resolveMediaUrl } from "@/lib/media"
@@ -86,9 +86,12 @@ function VideoCard({ product }: VideoCardProps) {
   if (!videoSrc) return null
 
   return (
-    <Link href={`/product/${product.slug}`} className="group relative w-full block cursor-pointer">
+    <div className="group relative w-full block">
       <div className="relative w-full mb-4" ref={setRefs}>
         <div className="aspect-[3/4] overflow-hidden bg-black rounded-sm relative">
+          <Link href={`/product/${product.slug}`} className="absolute inset-0 z-0" aria-label={`View ${product.name}`}>
+            <span className="sr-only">View {product.name}</span>
+          </Link>
           {isNearScreen && (
             <video
               ref={videoRef}
@@ -100,16 +103,16 @@ function VideoCard({ product }: VideoCardProps) {
               preload="metadata"
               disablePictureInPicture
               disableRemotePlayback
-              className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105 pointer-events-none"
               onLoadedData={() => { if (inView) setIsPlaying(true) }}
             />
           )}
 
           {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
           {/* Badges */}
-          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 flex flex-col gap-1 z-10 max-w-[calc(100%-2rem)] md:max-w-[calc(100%-3rem)] group-hover:-translate-y-10 md:group-hover:-translate-y-16 transition-transform duration-500">
+          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 flex flex-col gap-1 z-10 max-w-[calc(100%-2rem)] md:max-w-[calc(100%-3rem)] group-hover:-translate-y-10 md:group-hover:-translate-y-16 transition-transform duration-500 pointer-events-none">
             {discount > 0 && (
               <span className="bg-primary text-primary-foreground text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 font-medium rounded-sm whitespace-nowrap inline-block">
                 {discount}% OFF
@@ -127,7 +130,7 @@ function VideoCard({ product }: VideoCardProps) {
               e.stopPropagation()
               togglePlay()
             }}
-            className="absolute top-1 right-8 md:top-2 md:right-12 p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors opacity-0 group-hover:opacity-100 z-10"
+            className="absolute top-1 right-8 md:top-2 md:right-12 p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
             suppressHydrationWarning
           >
             {isPlaying ? (
@@ -145,7 +148,7 @@ function VideoCard({ product }: VideoCardProps) {
                 e.stopPropagation()
                 handleWishlistClick()
               }}
-              className={`p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors shadow-sm ${isWishlisted ? 'text-primary' : ''
+              className={`p-1.5 md:p-2 bg-background/90 hover:bg-background rounded-full transition-colors shadow-sm cursor-pointer ${isWishlisted ? 'text-primary' : ''
                 }`}
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
               suppressHydrationWarning
@@ -162,7 +165,7 @@ function VideoCard({ product }: VideoCardProps) {
                 e.stopPropagation()
                 addToCart(product)
               }}
-              className="w-full bg-background/95 hover:bg-white py-2 md:py-4 px-2 md:px-4 flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm btn-premium text-foreground border border-foreground/5"
+              className="w-full bg-background/95 hover:bg-white py-2 md:py-4 px-2 md:px-4 flex items-center justify-center gap-1 md:gap-2 text-[10px] md:text-sm btn-premium text-foreground border border-foreground/5 cursor-pointer"
               suppressHydrationWarning
             >
               <ShoppingBag className="w-3 h-3 md:w-4 md:h-4" />
@@ -172,7 +175,7 @@ function VideoCard({ product }: VideoCardProps) {
           </div>
 
           {/* Click to View Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-5">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
             <div className="bg-background/95 text-foreground px-4 py-2 rounded-full text-sm font-medium shadow-lg">
               View Details
             </div>
@@ -181,9 +184,11 @@ function VideoCard({ product }: VideoCardProps) {
       </div>
 
       <div className="block">
-        <h3 className="font-medium text-xs md:text-sm leading-tight mb-1 md:mb-2 group-hover:text-primary transition-colors line-clamp-2">
-          {product.name}
-        </h3>
+        <Link href={`/product/${product.slug}`} className="block group-hover:text-primary transition-colors">
+          <h3 className="font-medium text-xs md:text-sm leading-tight mb-1 md:mb-2 line-clamp-2">
+            {product.name}
+          </h3>
+        </Link>
         <div className="flex items-center gap-1 md:gap-2 flex-wrap">
           <span className="font-semibold text-xs md:text-sm">₹{price.toLocaleString('en-IN')}</span>
           {discount > 0 && (
@@ -193,21 +198,38 @@ function VideoCard({ product }: VideoCardProps) {
           )}
         </div>
       </div>
-    </Link>
+    </div>
   )
 }
 
 export function VideoSection() {
-  const { mappedProducts } = useProducts()
+  const [productsToShow, setProductsToShow] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Filter products that have videos
-  const videoProducts = mappedProducts.filter(p => p.videos && p.videos.length > 0)
+  useEffect(() => {
+    let cancelled = false
+    const fetchVideos = async () => {
+      try {
+        const { products } = await fetchPaginatedProductsClient({
+          hasVideo: "true",
+          limit: 12,
+          sortBy: "newest",
+        })
+        if (!cancelled && products) {
+          setProductsToShow(products)
+        }
+      } catch (err) {
+        console.error("Failed to load video section products:", err)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchVideos()
+    return () => { cancelled = true }
+  }, [])
 
-  // Show 12 curated videos (3 rows of 4) on the frontend
-  const productsToShow = videoProducts.slice(0, 12)
-
-  if (productsToShow.length === 0) {
-    return null // Gracefully hide the section if no videos exist
+  if (loading || productsToShow.length === 0) {
+    return null
   }
 
   return (

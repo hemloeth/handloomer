@@ -12,6 +12,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { CategoryProductsClient } from "./category-products-client"
 import { Suspense } from "react"
+import type { Metadata } from "next"
 import { apiServerGet, API_BASE_URL } from "@/lib/api"
 import { resolveMediaUrl } from "@/lib/media"
 
@@ -40,13 +41,13 @@ interface CategoryPageProps {
           ...baseSlides,
           {
             id: "linen-designer",
-            image: "/images/designer-saree.jpg",
+            image: "/images/celebrity-linen-couture-banner.jpg",
             title: "Pure Linen Collection",
             subtitle: "Breathable comfort meets timeless elegance"
           },
           {
             id: "linen-casual",
-            image: "/images/casual-saree.jpg",
+            image: "/images/celebrity-star-banner.jpg",
             title: "Everyday Elegance",
             subtitle: "Natural comfort for daily sophistication"
           },
@@ -63,7 +64,7 @@ interface CategoryPageProps {
           ...baseSlides,
           {
             id: "handloom-green",
-            image: "/images/products/handloom-green.jpg",
+            image: "/images/festive-sale-heritage-banner.jpg",
             title: "Handloom Heritage",
             subtitle: "Traditional weaving techniques passed down generations"
           },
@@ -80,7 +81,7 @@ interface CategoryPageProps {
           ...baseSlides,
           {
             id: "banarasi-red",
-            image: "/images/products/banarasi-red.jpg",
+            image: "/images/festive-linen-palace-banner.jpg",
             title: "Banarasi Silk",
             subtitle: "Luxurious silk with intricate gold zari work"
           },
@@ -97,7 +98,7 @@ interface CategoryPageProps {
           ...baseSlides,
           {
             id: "silk-cream",
-            image: "/images/products/silk-cream.jpg",
+            image: "/images/celebrity-linen-couture-banner.jpg",
             title: "Silk Linen Collection",
             subtitle: "Lustrous silk blend for special occasions"
           },
@@ -114,7 +115,7 @@ interface CategoryPageProps {
           ...baseSlides,
           {
             id: "embroidery-maroon",
-            image: "/images/products/embroidery-maroon.jpg",
+            image: "/images/celebrity-star-banner.jpg",
             title: "Embroidered Elegance",
             subtitle: "Intricate embroidery work on premium fabrics"
           },
@@ -154,7 +155,7 @@ interface CategoryPageProps {
           },
           {
             id: "cotton-casual",
-            image: "/images/casual-saree.jpg",
+            image: "/images/celebrity-linen-couture-banner.jpg",
             title: "Everyday Comfort",
             subtitle: "Soft textures for all-day comfort"
           }
@@ -164,7 +165,7 @@ interface CategoryPageProps {
         return [
           {
             id: "new-arrivals-main",
-            image: "/images/celebrity-look.jpg",
+            image: "/images/celebrity-star-banner.jpg",
             title: "New Arrivals",
             subtitle: "Discover our latest productCollection of handcrafted linen sarees"
           },
@@ -178,7 +179,7 @@ interface CategoryPageProps {
             id: "new-casual",
             image: "/images/casual-saree.jpg",
             title: "Modern Comfort",
-            subtitle: "Beautiful new styles for everyday elegance"
+            subtitle: "Discover our latest collection of handcrafted linen sarees"
           }
         ]
 
@@ -186,7 +187,7 @@ interface CategoryPageProps {
         return [
           {
             id: "sale-main",
-            image: "/images/celebrity-look.jpg",
+            image: "/images/big-sale-banner.jpg",
             title: "Sale Collection",
             subtitle: "Exclusive discounts on premium linen sarees"
           },
@@ -208,7 +209,7 @@ interface CategoryPageProps {
         return [
           {
             id: "festive-main",
-            image: resolveMediaUrl(festiveData?.image),
+            image: resolveMediaUrl(festiveData?.image) || "/images/festive-collection-hero.jpg",
             title: festiveData?.title2 || "Festive Collection",
             subtitle: festiveData?.description || "Discover our latest curated festive sarees for every celebration"
           }
@@ -218,7 +219,7 @@ interface CategoryPageProps {
         return [
           {
             id: "celebrity-main",
-            image: "/images/celebrity-look.jpg",
+            image: "/images/celebrity-linen-couture-banner.jpg",
             title: "Celebrity Collection",
             subtitle: "Get the iconic look with our celebrity-inspired linen sarees"
           }
@@ -227,210 +228,38 @@ interface CategoryPageProps {
       default:
         return baseSlides
     }
-
-  // Add specific slides based on productCollection type
-  switch (slug) {
-    case "pure-linen-saree":
-      return [
-        ...baseSlides,
-        {
-          id: "linen-designer",
-          image: "/images/designer-saree.jpg",
-          title: "Pure Linen Collection",
-          subtitle: "Breathable comfort meets timeless elegance"
-        },
-        {
-          id: "linen-casual",
-          image: "/images/casual-saree.jpg",
-          title: "Everyday Elegance",
-          subtitle: "Natural comfort for daily sophistication"
-        },
-        {
-          id: "linen-celebrity",
-          image: "/images/celebrity-look.jpg",
-          title: "Contemporary Style",
-          subtitle: "Modern designs with traditional charm"
-        }
-      ]
-
-    case "handloom":
-      return [
-        ...baseSlides,
-        {
-          id: "handloom-green",
-          image: "/images/products/handloom-green.jpg",
-          title: "Handloom Heritage",
-          subtitle: "Traditional weaving techniques passed down generations"
-        },
-        {
-          id: "handloom-rust",
-          image: "/images/products/handloom-rust.jpg",
-          title: "Artisan Crafted",
-          subtitle: "Each piece tells a story of skilled craftsmanship"
-        }
-      ]
-
-    case "banarasi-silk":
-      return [
-        ...baseSlides,
-        {
-          id: "banarasi-red",
-          image: "/images/products/banarasi-red.jpg",
-          title: "Banarasi Silk",
-          subtitle: "Luxurious silk with intricate gold zari work"
-        },
-        {
-          id: "banarasi-pink",
-          image: "/images/products/banarasi-pink.jpg",
-          title: "Royal Elegance",
-          subtitle: "Perfect for weddings and grand celebrations"
-        }
-      ]
-
-    case "silk-linen":
-      return [
-        ...baseSlides,
-        {
-          id: "silk-cream",
-          image: "/images/products/silk-cream.jpg",
-          title: "Silk Linen Collection",
-          subtitle: "Lustrous silk blend for special occasions"
-        },
-        {
-          id: "silk-navy",
-          image: "/images/products/silk-navy.jpg",
-          title: "Classic Sophistication",
-          subtitle: "Timeless colors for elegant styling"
-        }
-      ]
-
-    case "embroidery":
-      return [
-        ...baseSlides,
-        {
-          id: "embroidery-maroon",
-          image: "/images/products/embroidery-maroon.jpg",
-          title: "Embroidered Elegance",
-          subtitle: "Intricate embroidery work on premium fabrics"
-        },
-        {
-          id: "embroidery-detail",
-          image: "/images/designer-saree.jpg",
-          title: "Artisan Details",
-          subtitle: "Hand-embroidered motifs and patterns"
-        }
-      ]
-
-    case "kota-linen":
-      return [
-        ...baseSlides,
-        {
-          id: "kota-orange",
-          image: "/images/products/kota-orange.jpg",
-          title: "Kota Linen Collection",
-          subtitle: "Lightweight and airy for summer comfort"
-        },
-        {
-          id: "kota-casual",
-          image: "/images/casual-saree.jpg",
-          title: "Summer Essentials",
-          subtitle: "Perfect for warm weather styling"
-        }
-      ]
-
-    case "cotton-linen":
-      return [
-        ...baseSlides,
-        {
-          id: "cotton-white",
-          image: "/images/products/cotton-white.jpg",
-          title: "Cotton Linen Blend",
-          subtitle: "Comfortable and breathable for daily wear"
-        },
-        {
-          id: "cotton-casual",
-          image: "/images/casual-saree.jpg",
-          title: "Everyday Comfort",
-          subtitle: "Soft textures for all-day comfort"
-        }
-      ]
-
-    case "new-arrivals":
-      return [
-        {
-          id: "new-arrivals-main",
-          image: "/images/celebrity-look.jpg",
-          title: "New Arrivals",
-          subtitle: "Discover our latest productCollection of handcrafted linen sarees"
-        },
-        {
-          id: "new-designer",
-          image: "/images/designer-saree.jpg",
-          title: "Fresh Designs",
-          subtitle: "Contemporary patterns with traditional charm"
-        },
-        {
-          id: "new-casual",
-          image: "/images/casual-saree.jpg",
-          title: "Modern Comfort",
-          subtitle: "Beautiful new styles for everyday elegance"
-        }
-      ]
-
-    case "sale":
-      return [
-        {
-          id: "sale-main",
-          image: "/images/celebrity-look.jpg",
-          title: "Sale Collection",
-          subtitle: "Exclusive discounts on premium linen sarees"
-        },
-        {
-          id: "sale-designer",
-          image: "/images/designer-saree.jpg",
-          title: "Designer Sale",
-          subtitle: "Luxury sarees at unbeatable prices"
-        },
-        {
-          id: "sale-festive",
-          image: "/images/festive-saree.jpg",
-          title: "Festive Deals",
-          subtitle: "Premium celebration wear on special offer"
-        }
-      ]
-
-    case "festive":
-      return [
-        {
-          id: "festive-main",
-          image: resolveMediaUrl(festiveData?.image),
-          title: festiveData?.title2 || "Festive Collection",
-          subtitle: festiveData?.description || "Discover our latest curated festive sarees for every celebration"
-        }
-      ]
-
-    case "celebrity":
-      return [
-        {
-          id: "celebrity-main",
-          image: "/images/celebrity-look.jpg",
-          title: "Celebrity Collection",
-          subtitle: "Get the iconic look with our celebrity-inspired linen sarees"
-        }
-      ]
-
-    default:
-      return baseSlides
   }
-}
 
-export async function generateMetadata({ params }: CategoryPageProps) {
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params
-  const category = categories.find(c => c.slug === slug)
+  if (slug === 'all') {
+    return {
+      title: 'All Categories | Handloomer',
+      description: 'Explore our complete collection of premium sarees'
+    }
+  }
 
+  try {
+    const catRes = await apiServerGet('/api/category/allcategory', { cache: 'no-store' })
+    const dynamicCategories = catRes?.categories ? catRes.categories.map((c: any) => ({
+      ...c,
+      slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    })) : []
+    const category = dynamicCategories.find((c: any) => c.slug === slug)
+    if (category) {
+      return {
+        title: `${category.name} Sarees | Handloomer`,
+        description: category.sortDesc || category.description || `Handcrafted ${category.name} Sarees`
+      }
+    }
+  } catch {
+    // fallback to static categories
+  }
+
+  const category = categories.find(c => c.slug === slug)
   if (!category) {
     return {
-      title: "Collection Not Found | Handloomer"
+      title: 'Collection Not Found | Handloomer'
     }
   }
 

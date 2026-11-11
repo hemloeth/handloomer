@@ -17,6 +17,7 @@ export interface Product {
   isOnSale: boolean
   isFestive?: boolean
   isFeatured: boolean
+  isBestSeller?: boolean
   isNew: boolean
   productCollection?: string
   // Review stats (computed dynamically)
@@ -44,26 +45,51 @@ export const PRODUCT_STALE_TIME_MS = 30_000
 /** Homepage "Latest Arrivals" count — newest by `createdAt` DESC. */
 export const HOMEPAGE_PRODUCT_LIMIT = 20
 
+/**
+ * Canonical product slug generator.
+ * Produces `/product/<normalized-name>-<SKU>`.
+ * Consistent across all server and client mappings.
+ */
+export function createProductSlug(name: string, sku?: string): string {
+  const normalizedName = (name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+  if (!sku) return normalizedName;
+  const normalizedSku = String(sku).trim();
+  return normalizedSku ? `${normalizedName}-${normalizedSku}` : normalizedName;
+}
+
 // Map a backend product to the frontend Product interface
-function mapProductFromDB(dbProduct: any): Product {
+export function mapProductFromDB(dbProduct: any): Product {
   const isVideoStr = typeof dbProduct.videoFile === "string" || typeof dbProduct.videoUrl === "string";
+  const categoryName = typeof dbProduct.category === "string"
+    ? dbProduct.category
+    : (dbProduct.category?.name || "");
+  const categorySlug = categoryName
+    ? categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+    : '';
+
+  // Extract all gallery image URLs (supporting both string URLs and object format { url })
+  const galleryUrls = Array.isArray(dbProduct.galleryImages)
+    ? dbProduct.galleryImages.map((img: any) => (typeof img === "string" ? img : img?.url || "")).filter(Boolean)
+    : [];
+
+  // Combine mainImage and all gallery images without duplicates while preserving order
+  const allImages = [dbProduct.mainImage, ...galleryUrls].filter(Boolean);
+  const uniqueImages = Array.from(new Set(allImages));
 
   return {
-    id: dbProduct._id.toString(),
+    id: dbProduct._id ? dbProduct._id.toString() : "",
     sku: dbProduct.sku,
     name: dbProduct.name,
-    slug: `${dbProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')}-${dbProduct.sku}`,
-    category: dbProduct.category,
-    categorySlug: dbProduct.category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+    slug: createProductSlug(dbProduct.name, dbProduct.sku),
+    category: categoryName,
+    categorySlug,
     price: dbProduct.price,
     originalPrice: dbProduct.regularPrice || dbProduct.price,
     image: dbProduct.mainImage,
-    // Card carries main + at most one alternate (hover). Full gallery is
-    // detail-page only — avoids N gallery/video decodes per grid.
-    images: [
-      dbProduct.mainImage,
-      ...(dbProduct.galleryImages ? dbProduct.galleryImages.slice(0, 1).map((img: any) => img.url) : [])
-    ].filter(Boolean),
+    images: uniqueImages,
     videos: isVideoStr ? [
       (() => {
         const v = dbProduct.videoFile || dbProduct.videoUrl;
@@ -86,9 +112,10 @@ function mapProductFromDB(dbProduct: any): Product {
     fabric: dbProduct.material || "Linen",
     color: dbProduct.color || "Multicolor",
     isOnSale: dbProduct.isOnSale || (!!dbProduct.regularPrice && dbProduct.regularPrice > dbProduct.price),
-    isFestive: dbProduct.isFestive || false,
-    isFeatured: true, // We can make this dynamic later if the backend supports it
-    isNew: dbProduct.isNewArrival || false,
+    isFestive: !!dbProduct.isFestive,
+    isFeatured: !!dbProduct.isFeatured,
+    isBestSeller: !!dbProduct.isBestSeller,
+    isNew: !!dbProduct.isNewArrival,
     productCollection: dbProduct.productCollection || "",
     material: dbProduct.material,
     sareeSize: dbProduct.sareeSize,
@@ -99,7 +126,7 @@ function mapProductFromDB(dbProduct: any): Product {
     internationalNote: dbProduct.internationalNote,
     averageRating: dbProduct.averageRating || 0,
     totalReviews: dbProduct.numReviews || 0,
-    stock: dbProduct.stock || 0
+    stock: typeof dbProduct.stock === 'number' ? dbProduct.stock : (dbProduct.stock ? Number(dbProduct.stock) : 0)
   };
 }
 
@@ -145,6 +172,24 @@ export async function fetchProductBySku(sku: string): Promise<Product | null> {
   return null;
 }
 
+export async function fetchProductBySlug(slug: string): Promise<Product | null> {
+  try {
+    const { apiServerGet } = await import("@/lib/api");
+    const data = await apiServerGet(`/api/product/by-slug/${encodeURIComponent(slug)}`, { cache: 'no-store', revalidate: 0 });
+
+    if (data.success && data.product) {
+      return mapProductFromDB(data.product);
+    }
+  } catch (error: any) {
+    if (error.message !== "Product not found" && error.message !== "\"Product not found\"") {
+      const { API_BASE_URL } = await import("@/lib/api");
+      console.error(`Error fetching product by slug (${API_BASE_URL}/api/product/by-slug/${slug}):`, error.message || error);
+    }
+  }
+
+  return null;
+}
+
 export interface FetchProductsResponse {
   products: Product[];
   pagination?: {
@@ -166,7 +211,7 @@ export async function fetchPaginatedProducts(queryParams: Record<string, any> = 
       .reduce((acc, [k, v]) => ({ ...acc, [k]: String(v) }), {});
       
     const query = new URLSearchParams(cleanParams).toString();
-    const url = `/api/product/allproducts${query ? `?${query}&fullData=true` : '?fullData=true'}`;
+    const url = `/api/product/allproducts${query ? `?${query}` : ''}`;
     
     const data = await apiServerGet(url, { cache: 'no-store', revalidate: 0 });
 
@@ -579,6 +624,8 @@ export function getNewProducts(productsList: Product[]): Product[] {
 }
 
 export function getBestSellers(productsList: Product[]): Product[] {
+  const explicit = productsList.filter(p => p.isBestSeller);
+  if (explicit.length > 0) return explicit.slice(0, 12);
   return productsList
     .filter(p => p.isFeatured || p.isOnSale)
     .sort((a, b) => {

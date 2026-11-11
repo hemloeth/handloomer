@@ -46,6 +46,11 @@ const sidebarSections = [
                 href: "/admin/customers",
                 icon: Users,
             },
+            {
+                title: "Reviews",
+                href: "/admin/reviews",
+                icon: Star,
+            },
         ]
     },
     {

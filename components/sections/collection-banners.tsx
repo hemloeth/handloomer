@@ -7,44 +7,38 @@ import { API_BASE_URL } from "@/lib/api"
 import { resolveMediaUrl } from "@/lib/media"
 import { useProducts } from "@/context/product-context"
 import { ProductCard } from "@/components/products/product-card"
+import { fetchPaginatedProductsClient, type Product } from "@/lib/products"
 import { ArrowRight, Sparkles, Tag } from "lucide-react"
 
 export function CollectionBanners() {
   const [saleData, setSaleData] = useState<any>(null)
   const [festiveData, setFestiveData] = useState<any>(null)
-  const { mappedProducts, loading } = useProducts()
-
-  const festiveProducts = mappedProducts.filter(
-    (p: any) => p.isFestive || p.productCollection === "festive"
-  )
-  const displayFestiveProducts = festiveProducts.slice(0, 4)
-
-  const saleProducts = mappedProducts.filter(
-    (p: any) => p.isOnSale || p.productCollection === "big-sale" || p.productCollection === "sale" || (p.originalPrice && p.originalPrice > p.price)
-  )
-  const displaySaleProducts = saleProducts.slice(0, 4)
+  const [displayFestiveProducts, setDisplayFestiveProducts] = useState<Product[]>([])
+  const [displaySaleProducts, setDisplaySaleProducts] = useState<Product[]>([])
 
   useEffect(() => {
-    const fetchBanners = async () => {
+    let cancelled = false
+    const fetchBannersAndProducts = async () => {
       try {
-        // Fetch Sale Offer Banner
-        const saleRes = await fetch(`${API_BASE_URL}/api/marketing-collections/big-sale`)
-        const saleResponse = await saleRes.json().catch(() => null)
-        if (saleResponse && saleResponse.success) {
-          setSaleData(saleResponse.data)
-        }
+        const [saleRes, festiveRes, festiveProductsRes, saleProductsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/marketing-collections/big-sale`).then(r => r.json()).catch(() => null),
+          fetch(`${API_BASE_URL}/api/marketing-collections/festive`).then(r => r.json()).catch(() => null),
+          fetchPaginatedProductsClient({ isFestive: "true", limit: 4, sortBy: "newest" }),
+          fetchPaginatedProductsClient({ isOnSale: "true", limit: 4, sortBy: "newest" }),
+        ])
 
-        // Fetch Festive Collection Banner
-        const festiveRes = await fetch(`${API_BASE_URL}/api/marketing-collections/festive`)
-        const festiveResponse = await festiveRes.json().catch(() => null)
-        if (festiveResponse && festiveResponse.success) {
-          setFestiveData(festiveResponse.data)
+        if (!cancelled) {
+          if (saleRes && saleRes.success) setSaleData(saleRes.data)
+          if (festiveRes && festiveRes.success) setFestiveData(festiveRes.data)
+          if (festiveProductsRes?.products) setDisplayFestiveProducts(festiveProductsRes.products)
+          if (saleProductsRes?.products) setDisplaySaleProducts(saleProductsRes.products)
         }
       } catch (error) {
-        console.warn("Failed to fetch custom collection banners, using default visual fallbacks:", error)
+        console.warn("Failed to fetch custom collection banners or products:", error)
       }
     }
-    fetchBanners()
+    fetchBannersAndProducts()
+    return () => { cancelled = true }
   }, [])
 
   return (
@@ -134,7 +128,7 @@ export function CollectionBanners() {
                 href={festiveData?.link || "/collections/festive"}
                 className="inline-flex items-center gap-2 text-xs sm:text-sm tracking-widest uppercase hover:text-primary transition-colors font-medium group"
               >
-                View Full Festive Collection ({festiveProducts.length})
+                View Full Festive Collection
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
@@ -229,7 +223,7 @@ export function CollectionBanners() {
                 href={saleData?.link || "/collections/big-sale"}
                 className="inline-flex items-center gap-2 text-xs sm:text-sm tracking-widest uppercase hover:text-primary transition-colors font-medium group"
               >
-                View All Sale Offers ({saleProducts.length})
+                View All Sale Offers
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>

@@ -6,7 +6,7 @@ import { ProductReviews } from "@/components/products/product-reviews"
 import { JsonLd } from "@/components/common/json-ld"
 import { DiscoveryFeed } from "@/components/products/discovery-feed"
 import { RecentlyViewed } from "@/components/products/recently-viewed"
-import { fetchProductBySku, fetchPaginatedProducts, fetchProductsFromDB } from "@/lib/products"
+import { fetchProductBySku, fetchProductBySlug, fetchPaginatedProducts } from "@/lib/products"
 import type { Product } from "@/lib/products"
 import { notFound } from "next/navigation"
 import { resolveMediaUrl } from "@/lib/media"
@@ -21,23 +21,25 @@ interface Props {
 }
 
 const getProduct = cache(async (slug: string): Promise<Product | null> => {
-  // Extract SKU from the end of the URL slug (e.g., name-slug-SKU)
-  const parts = slug.split('-');
-  const sku = parts[parts.length - 1];
-  
-  if (sku) {
-    const product = await fetchProductBySku(sku);
-    if (product) return product;
+  // 1. Candidate SKU suffixes if slug contains hyphens (supports hyphens inside SKUs)
+  if (slug.includes('-')) {
+    const parts = slug.split('-');
+    for (let segs = 1; segs < parts.length && segs <= 6; segs++) {
+      const candidateSku = parts.slice(parts.length - segs).join('-');
+      const product = await fetchProductBySku(candidateSku);
+      if (product) return product;
+    }
   }
 
-  // Fallback for old URLs or URLs where SKU parsing failed
-  const products = await fetchProductsFromDB();
-  const product = products.find(p => {
-    const oldSlug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    return p.slug === slug || oldSlug === slug;
-  });
+  // 2. Direct SKU attempt
+  const directSkuProduct = await fetchProductBySku(slug);
+  if (directSkuProduct) return directSkuProduct;
 
-  return product || null;
+  // 3. Fallback to /api/product/by-slug/:slug (full data resolution for legacy name slugs)
+  const productBySlug = await fetchProductBySlug(slug);
+  if (productBySlug) return productBySlug;
+
+  return null;
 })
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -156,8 +158,8 @@ export default async function ProductPage({ params }: Props) {
 }
 
 export async function generateStaticParams() {
-  const products = await fetchProductsFromDB()
-  return products.map((product) => ({
+  const { products } = await fetchPaginatedProducts({ limit: 50 })
+  return (products || []).map((product) => ({
     slug: product.slug,
   }))
 }

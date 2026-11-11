@@ -13,25 +13,25 @@ import { Search, X, Sparkles, SlidersHorizontal, ArrowLeft } from "lucide-react"
 const searchSlides = [
   {
     id: "search-main",
-    image: "/images/hero-saree.jpg",
+    image: "/images/festive-collection-hero.jpg",
     title: "Find Your Perfect Saree",
     subtitle: "Search through our curated collection of premium linen sarees"
   },
   {
     id: "search-variety",
-    image: "/images/celebrity-look.jpg",
+    image: "/images/celebrity-star-banner.jpg",
     title: "Endless Variety",
     subtitle: "From casual to festive, discover sarees for every occasion"
   },
   {
     id: "search-quality",
-    image: "/images/handloom-saree.jpg",
+    image: "/images/celebrity-linen-couture-banner.jpg",
     title: "Premium Quality",
     subtitle: "Handcrafted sarees with attention to every detail"
   },
   {
     id: "search-colors",
-    image: "/images/designer-saree.jpg",
+    image: "/images/big-sale-banner.jpg",
     title: "Vibrant Colors",
     subtitle: "Explore our rainbow of colors and patterns"
   }
@@ -47,6 +47,8 @@ function SearchContent() {
   const [filters, setFilters] = useState<FilterOptions>({})
   const [sortBy, setSortBy] = useState<SortOption>('featured')
   const [results, setResults] = useState<Product[]>([])
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState<{ currentPage: number; totalPages: number; totalProducts: number } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const generationRef = useRef(0)
 
@@ -55,6 +57,7 @@ function SearchContent() {
     const searchQuery = searchParams.get('q') || ''
     setQuery(searchQuery)
     setInputValue(searchQuery)
+    setPage(1)
     document.title = searchQuery
       ? `Search: ${searchQuery} - The Handloomer`
       : 'Search Products - The Handloomer'
@@ -68,9 +71,9 @@ function SearchContent() {
     let cancelled = false
     setIsSearching(true)
     const params: Record<string, unknown> = {
-      limit: 100,
-      page: 1,
-      sortBy: sortBy === 'featured' || sortBy === 'color-asc' || sortBy === 'color-desc' ? 'newest' : sortBy,
+      limit: 20,
+      page,
+      sortBy: sortBy,
     }
     if (query.trim()) params.search = query.trim()
     if (filters.categories?.length) params.category = filters.categories.join(',')
@@ -82,12 +85,20 @@ function SearchContent() {
     }
     if (filters.isOnSale !== undefined) params.isOnSale = String(filters.isOnSale)
     // `isNew` here is the explicit New Arrivals flag (isNewArrival=true).
+    if (filters.isFeatured !== undefined) params.isFeatured = String(filters.isFeatured)
     if (filters.isNew !== undefined) params.isNewArrival = String(filters.isNew)
     ;(async () => {
       try {
-        const { products } = await fetchPaginatedProductsClient(params)
+        const { products, pagination: pag } = await fetchPaginatedProductsClient(params)
         if (cancelled || generation !== generationRef.current) return
-        setResults(products)
+        setResults(products || [])
+        if (pag) {
+          setPagination({
+            currentPage: pag.currentPage,
+            totalPages: pag.totalPages,
+            totalProducts: pag.totalProducts
+          })
+        }
       } catch (err) {
         if (cancelled || generation !== generationRef.current) return
         console.error('Search failed', err)
@@ -96,7 +107,7 @@ function SearchContent() {
       }
     })()
     return () => { cancelled = true }
-  }, [query, filters, sortBy])
+  }, [query, filters, sortBy, page])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -226,6 +237,8 @@ function SearchContent() {
           <SearchResults
             products={results}
             query={query}
+            pagination={pagination}
+            onPageChange={setPage}
             onSuggestionClick={handleSuggestionClick}
             onFiltersChange={handleFiltersChange}
           />

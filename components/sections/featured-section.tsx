@@ -12,7 +12,7 @@ export function FeaturedSection() {
           {/* Image */}
           <div className="relative aspect-[4/5] lg:aspect-[3/4] overflow-hidden">
             <Image
-              src="/images/festive-saree.jpg"
+              src="/images/festive-collection-hero.jpg"
               alt="Festive collection"
               fill
               className="object-cover"

@@ -23,7 +23,8 @@ import {
 import { MoreHorizontal, Search, AlertTriangle, Trash2, X, CheckSquare, Square, ListChecks, Eye, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useProducts } from "@/context/product-context"
-import { getAdminCache, setAdminCache, hasAdminCache } from "@/lib/admin-page-cache"
+import { getAdminCache, setAdminCache, hasAdminCache, clearAdminCache } from "@/lib/admin-page-cache"
+import { createProductSlug } from "@/lib/products"
 import { AdminToast, ToastItem } from "@/components/admin/admin-toast"
 import { ConfirmModal } from "@/components/admin/confirm-modal"
 import { QuickSaleModal } from "@/components/admin/quick-sale-modal"
@@ -147,6 +148,9 @@ export default function AdminProductsPage() {
 
     try {
       await deleteProduct(deleteTarget.id)
+      setPageProducts(prev => prev.filter(p => p._id !== deleteTarget.id))
+      setTotalProducts(prev => Math.max(0, prev - 1))
+      clearAdminCache()
       setDeleteTarget(null)
       showToast("Product Deleted", `"${deletedName}" has been deleted successfully`)
     } catch (err: any) {
@@ -186,6 +190,10 @@ export default function AdminProductsPage() {
     try {
       const ids = Array.from(selectedIds)
       const deletedCount = await deleteMultipleProducts(ids)
+      const idSet = new Set(ids)
+      setPageProducts(prev => prev.filter(p => !idSet.has(p._id)))
+      setTotalProducts(prev => Math.max(0, prev - deletedCount))
+      clearAdminCache()
       setShowBulkDeleteModal(false)
       showToast(
         `${deletedCount} Product${deletedCount > 1 ? "s" : ""} Deleted`,
@@ -209,10 +217,13 @@ export default function AdminProductsPage() {
     setUpdatingField('isFestive')
     try {
       const nextIsFestive = !product.isFestive
+      const nextCollection = nextIsFestive ? "festive" : (product.productCollection === "festive" ? "" : (product.productCollection || ""))
       await quickUpdateProduct(product._id, {
         isFestive: nextIsFestive,
-        productCollection: nextIsFestive ? "festive" : (product.productCollection === "festive" ? "" : (product.productCollection || ""))
+        productCollection: nextCollection
       })
+      setPageProducts(prev => prev.map(p => p._id === product._id ? { ...p, isFestive: nextIsFestive, productCollection: nextCollection } : p))
+      clearAdminCache()
       showToast(
         nextIsFestive ? "Added to Festive" : "Removed from Festive",
         `"${product.name}" is ${nextIsFestive ? "now" : "no longer"} in the festive collection`
@@ -238,9 +249,59 @@ export default function AdminProductsPage() {
       await quickUpdateProduct(product._id, {
         productCollection: nextCollection
       })
+      setPageProducts(prev => prev.map(p => p._id === product._id ? { ...p, productCollection: nextCollection } : p))
+      clearAdminCache()
       showToast(
         !isCurrentlyStar ? "Added to Dress Like a Star" : "Removed from Celebrity Collection",
         `"${product.name}" is ${!isCurrentlyStar ? "now" : "no longer"} in the celebrity collection`
+      )
+    } catch (err: any) {
+      showToast(
+        "Update Failed",
+        err.message || "Not authorized to modify products",
+        "error"
+      )
+    } finally {
+      setUpdatingId(null)
+      setUpdatingField(null)
+    }
+  }
+
+  const handleToggleFeatured = async (product: any) => {
+    setUpdatingId(product._id)
+    setUpdatingField('isFeatured')
+    try {
+      const nextFeatured = !product.isFeatured
+      await quickUpdateProduct(product._id, { isFeatured: nextFeatured })
+      setPageProducts(prev => prev.map(p => p._id === product._id ? { ...p, isFeatured: nextFeatured } : p))
+      clearAdminCache()
+      showToast(
+        nextFeatured ? "Added to Featured" : "Removed from Featured",
+        `"${product.name}" is ${nextFeatured ? "now" : "no longer"} featured`
+      )
+    } catch (err: any) {
+      showToast(
+        "Update Failed",
+        err.message || "Not authorized to modify products",
+        "error"
+      )
+    } finally {
+      setUpdatingId(null)
+      setUpdatingField(null)
+    }
+  }
+
+  const handleToggleBestSeller = async (product: any) => {
+    setUpdatingId(product._id)
+    setUpdatingField('isBestSeller')
+    try {
+      const nextBestSeller = !product.isBestSeller
+      await quickUpdateProduct(product._id, { isBestSeller: nextBestSeller })
+      setPageProducts(prev => prev.map(p => p._id === product._id ? { ...p, isBestSeller: nextBestSeller } : p))
+      clearAdminCache()
+      showToast(
+        nextBestSeller ? "Marked Best Seller" : "Removed from Best Sellers",
+        `"${product.name}" is ${nextBestSeller ? "now" : "no longer"} a best seller`
       )
     } catch (err: any) {
       showToast(
@@ -538,6 +599,36 @@ export default function AdminProductsPage() {
                             } ${updatingId === product._id && updatingField === 'celebrity' ? "animate-pulse opacity-70 cursor-not-allowed" : ""}`}
                           title={product.productCollection === "celebrity" ? "Remove from Celebrity Collection" : "Add to Dress Like a Star (Celebrity)"}
                         ><span className="translate-y-px">{product.productCollection === "celebrity" ? "✓ STAR" : "+ STAR"}</span></span>
+
+                        {/* FEATURED */}
+                        <span
+                          role="button"
+                          onClick={() => {
+                            if (!(updatingId === product._id && updatingField === 'isFeatured')) {
+                              handleToggleFeatured(product);
+                            }
+                          }}
+                          className={`group relative inline-flex items-center justify-center py-0.5 px-2 rounded-none text-[10px] font-bold cursor-pointer select-none transition-all duration-200 border whitespace-nowrap ${product.isFeatured
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-xs hover:bg-emerald-700"
+                            : "bg-background border-dashed border-muted-foreground/30 text-muted-foreground hover:border-emerald-500 hover:text-emerald-500"
+                            } ${updatingId === product._id && updatingField === 'isFeatured' ? "animate-pulse opacity-70 cursor-not-allowed" : ""}`}
+                          title={product.isFeatured ? "Remove from Featured" : "Mark as Featured"}
+                        ><span className="translate-y-px">{product.isFeatured ? "✓ FEATURED" : "+ FEATURED"}</span></span>
+
+                        {/* BEST SELLER */}
+                        <span
+                          role="button"
+                          onClick={() => {
+                            if (!(updatingId === product._id && updatingField === 'isBestSeller')) {
+                              handleToggleBestSeller(product);
+                            }
+                          }}
+                          className={`group relative inline-flex items-center justify-center py-0.5 px-2 rounded-none text-[10px] font-bold cursor-pointer select-none transition-all duration-200 border whitespace-nowrap ${product.isBestSeller
+                            ? "bg-blue-600 border-blue-600 text-white shadow-xs hover:bg-blue-700"
+                            : "bg-background border-dashed border-muted-foreground/30 text-muted-foreground hover:border-blue-500 hover:text-blue-500"
+                            } ${updatingId === product._id && updatingField === 'isBestSeller' ? "animate-pulse opacity-70 cursor-not-allowed" : ""}`}
+                          title={product.isBestSeller ? "Remove from Best Sellers" : "Mark as Best Seller"}
+                        ><span className="translate-y-px">{product.isBestSeller ? "✓ BEST" : "+ BEST"}</span></span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -556,7 +647,7 @@ export default function AdminProductsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuItem onClick={() => {
-                          const slug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+                          const slug = createProductSlug(product.name, product.sku);
                           window.location.href = `/product/${slug}`;
                         }}>
                           <Eye className="w-4 h-4 mr-2" />
@@ -685,6 +776,8 @@ export default function AdminProductsPage() {
         onSave={async (id, updates) => {
           try {
             await quickUpdateProduct(id, updates)
+            setPageProducts(prev => prev.map(p => p._id === id ? { ...p, ...updates } : p))
+            clearAdminCache()
             showToast("Sale Updated", "Sale details saved successfully")
           } catch (err: any) {
             showToast(

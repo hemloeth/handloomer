@@ -33,14 +33,35 @@ export function CategoryProductsClient({
   const totalPages = pagination?.totalPages || 1
   const totalProducts = pagination?.totalProducts || initialProducts.length
 
+  const priceMinParam = searchParams.get('priceMin')
+  const priceMaxParam = searchParams.get('priceMax')
+  const priceMin = priceMinParam ? Number(priceMinParam) : undefined
+  const priceMax = priceMaxParam ? Number(priceMaxParam) : undefined
+
   // Construct filters from URL
   const filters: FilterOptions = {
     categories: searchParams.get('category') ? searchParams.get('category')?.split(',') : [],
     colors: searchParams.get('color') ? searchParams.get('color')?.split(',') : [],
     fabrics: searchParams.get('material') ? searchParams.get('material')?.split(',') : [],
     isOnSale: searchParams.get('isOnSale') === 'true' ? true : undefined,
+    isFeatured: searchParams.get('isFeatured') === 'true' ? true : undefined,
+    isNew: searchParams.get('isNewArrival') === 'true' ? true : undefined,
+    priceRange: (priceMin !== undefined || priceMax !== undefined) ? {
+      min: priceMin ?? 0,
+      max: priceMax ?? 100000,
+    } : undefined
   }
   const sortBy = (searchParams.get('sortBy') as SortOption) || 'featured'
+
+  const hasActiveFilters = Boolean(
+    (filters.categories && filters.categories.length > 0) ||
+    (filters.colors && filters.colors.length > 0) ||
+    (filters.fabrics && filters.fabrics.length > 0) ||
+    filters.isOnSale !== undefined ||
+    filters.isFeatured !== undefined ||
+    filters.isNew !== undefined ||
+    filters.priceRange !== undefined
+  )
 
   const updateUrl = (newParams: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -66,6 +87,10 @@ export function CategoryProductsClient({
       color: newFilters.colors?.join(','),
       material: newFilters.fabrics?.join(','),
       isOnSale: newFilters.isOnSale ? 'true' : undefined,
+      isFeatured: newFilters.isFeatured ? 'true' : undefined,
+      isNewArrival: newFilters.isNew ? 'true' : undefined,
+      priceMin: newFilters.priceRange ? String(newFilters.priceRange.min) : undefined,
+      priceMax: newFilters.priceRange ? String(newFilters.priceRange.max) : undefined,
       page: '1' // Reset to first page
     })
   }
@@ -111,6 +136,8 @@ export function CategoryProductsClient({
                 <option value="name-asc">Name: A to Z</option>
                 <option value="name-desc">Name: Z to A</option>
                 <option value="color-asc">Color: Color</option>
+                <option value="color-asc">Color: A to Z</option>
+                <option value="color-desc">Color: Z to A</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" />
             </div>
@@ -151,12 +178,12 @@ export function CategoryProductsClient({
         ) : (
           <div className="text-center py-20">
             <p className="text-muted-foreground text-lg mb-4">
-              {Object.keys(filters).length > 0
+              {hasActiveFilters
                 ? "No products match your current filters"
                 : "No products found in this collection"
               }
             </p>
-            {Object.keys(filters).length > 0 ? (
+            {hasActiveFilters ? (
               <button
                 onClick={() => {
                   router.push('?', { scroll: false })
@@ -213,6 +240,8 @@ export function CategoryProductsClient({
                 { value: "name-asc", label: "Name: A to Z" },
                 { value: "name-desc", label: "Name: Z to A" },
                 { value: "color-asc", label: "Color: Color" },
+                { value: "color-asc", label: "Color: A to Z" },
+                { value: "color-desc", label: "Color: Z to A" },
               ].map((opt) => (
                 <button
                   key={opt.value}

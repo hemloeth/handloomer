@@ -70,7 +70,7 @@ export function PageHeroSlider({
       <div className="absolute inset-0">
         {slides.map((slide, index) => {
           const slideKey = slide?.id || String(index);
-          const imgSrc = fallbackImages[slideKey] || slide?.image || "/images/celebrity-look.jpg";
+          const imgSrc = fallbackImages[slideKey] || slide?.image || "/images/celebrity-star-banner.jpg";
 
           return (
             <div
@@ -89,7 +89,7 @@ export function PageHeroSlider({
                   onError={() => {
                     setFallbackImages(prev => ({
                       ...prev,
-                      [slideKey]: "/images/celebrity-look.jpg"
+                      [slideKey]: "/images/celebrity-star-banner.jpg"
                     }))
                   }}
                 />

@@ -2,7 +2,7 @@ import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { PageHeroSlider } from "@/components/sections/page-hero-slider"
 import { CategoryProductsClient } from "../categories/[slug]/category-products-client"
-import { fetchPaginatedProducts, getBestSellers, fetchProductsFromDB } from "@/lib/products"
+import { fetchPaginatedProducts } from "@/lib/products"
 import { apiServerGet } from "@/lib/api"
 import Link from "next/link"
 import { Suspense } from "react"
@@ -20,7 +20,7 @@ interface BestSellersPageProps {
 const bestSellerSlides = [
   {
     id: "best-sellers-main",
-    image: "/images/celebrity-look.jpg",
+    image: "/images/celebrity-linen-couture-banner.jpg",
     title: "Best Sellers",
     subtitle: "Our most coveted handcrafted sarees, loved and reviewed by thousands"
   }
@@ -35,18 +35,25 @@ const breadcrumbs = [
 export default async function BestSellersPage({ searchParams }: BestSellersPageProps) {
   const resolvedSearchParams = await searchParams
 
-  // Fetch paginated products with best-selling / popular sorting or filters
+  // Fetch paginated products with isBestSeller: "true"
   const { products: paginatedProducts, pagination } = await fetchPaginatedProducts({
     ...resolvedSearchParams,
     sort: resolvedSearchParams.sort || "featured",
+    isBestSeller: "true",
     limit: 20
   })
 
-  // Fallback to fetchProductsFromDB if pagination API returns empty
+  // Fallback to featured query if no products flagged as best seller
   let displayProducts = paginatedProducts
+  let currentPagination = pagination
   if (!displayProducts || displayProducts.length === 0) {
-    const allDbProducts = await fetchProductsFromDB()
-    displayProducts = getBestSellers(allDbProducts)
+    const featuredRes = await fetchPaginatedProducts({
+      ...resolvedSearchParams,
+      sortBy: "featured",
+      limit: 20
+    })
+    displayProducts = featuredRes.products
+    currentPagination = featuredRes.pagination
   }
 
   // Fetch marketing collections for the subnav
@@ -105,7 +112,7 @@ export default async function BestSellersPage({ searchParams }: BestSellersPageP
       <Suspense fallback={<div className="py-20 text-center text-muted-foreground">Loading best sellers...</div>}>
         <CategoryProductsClient
           initialProducts={displayProducts}
-          pagination={pagination}
+          pagination={currentPagination}
           pageTitle="Best Sellers"
         />
       </Suspense>

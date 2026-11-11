@@ -6,6 +6,7 @@ import { ShoppingBag, Heart, Play, Pause, ChevronLeft, ChevronRight } from "luci
 import { useCart } from "@/context/cart-context"
 import { useWishlist } from "@/context/wishlist-context"
 import { useProducts } from "@/context/product-context"
+import { fetchPaginatedProductsClient, type Product } from "@/lib/products"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import Link from "next/link"
@@ -65,7 +66,7 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
     }
   }, [inView])
 
-  const targetProduct = product || mappedProducts.find(p => p.id === productId) || {
+  const targetProduct = product || {
     id: productId,
     name: title,
     price,
@@ -197,11 +198,35 @@ function VideoCard({ title, price, originalPrice, videoSrc, productId, category,
 
 function VideoCollectionContent() {
   const { mappedProducts } = useProducts()
+  const [videoProducts, setVideoProducts] = useState<Product[]>([])
+  const [loadingVideos, setLoadingVideos] = useState(true)
   const searchParams = useSearchParams()
   const categoryFromUrl = searchParams.get('category')
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchVideos = async () => {
+      try {
+        const { products } = await fetchPaginatedProductsClient({
+          hasVideo: "true",
+          limit: 100,
+          sortBy: "newest"
+        })
+        if (!cancelled && products) {
+          setVideoProducts(products)
+        }
+      } catch (err) {
+        console.error("Failed to load video products:", err)
+      } finally {
+        if (!cancelled) setLoadingVideos(false)
+      }
+    }
+    fetchVideos()
+    return () => { cancelled = true }
+  }, [])
   
   // Extract products with videos and map them to video cards
-  const videoCards = mappedProducts
+  const videoCards = videoProducts
     .filter(p => p.videos && p.videos.length > 0)
     .map(p => ({
       title: p.name,
@@ -223,12 +248,12 @@ function VideoCollectionContent() {
   )
   const [currentHeroVideo, setCurrentHeroVideo] = useState(0)
 
-  // Update selected category when URL parameter changes
+  // Update selected category when URL parameter changes or categories load
   useEffect(() => {
     if (categoryFromUrl && dynamicCategories.includes(categoryFromUrl)) {
       setSelectedCategory(categoryFromUrl)
     }
-  }, [categoryFromUrl, mappedProducts.length])
+  }, [categoryFromUrl, dynamicCategories.length])
 
   const filteredVideos = selectedCategory === "All"
     ? videoCards

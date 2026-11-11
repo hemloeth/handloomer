@@ -175,15 +175,11 @@ export function ProductCard({ product, className, eager = false }: ProductCardPr
         ) : (
           <Link
             href={`/checkout?product=${product.id}`}
-            className="flex-1 h-full"
+            className="flex-1 h-full flex items-center justify-center bg-background border border-primary text-primary hover:bg-primary/5 px-3 text-[10px] md:text-xs font-bold transition-all rounded-sm active:scale-95 shadow-sm uppercase tracking-wider text-center"
             onClick={() => addToCart(product)}
+            suppressHydrationWarning
           >
-            <button 
-              className="w-full h-full flex items-center justify-center bg-background border border-primary text-primary hover:bg-primary/5 px-3 text-[10px] md:text-xs font-bold transition-all rounded-sm active:scale-95 shadow-sm uppercase tracking-wider"
-              suppressHydrationWarning
-            >
-              Buy Now
-            </button>
+            Buy Now
           </Link>
         )}
       </div>

@@ -6,9 +6,8 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Search, X, ArrowRight, Sparkles, Clock, Tag, ShoppingBag, ChevronRight, CornerDownLeft } from "lucide-react"
-import { useProducts } from "@/context/product-context"
 import { resolveMediaUrl } from "@/lib/media"
-import { Product } from "@/lib/products"
+import { type Product, fetchPaginatedProductsClient } from "@/lib/products"
 
 interface SearchModalProps {
   isOpen: boolean
@@ -35,12 +34,14 @@ const QUICK_CATEGORIES = [
 ]
 
 export function SearchModal({ isOpen, onClose }: SearchModalProps) {
-  const { mappedProducts, searchProducts } = useProducts()
   const [query, setQuery] = useState('')
+  const [liveResults, setLiveResults] = useState<Product[]>([])
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const searchGenRef = useRef(0)
   const router = useRouter()
 
   useEffect(() => {
@@ -125,16 +126,53 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  // Real-time live filtered search results
-  const liveResults = useMemo(() => {
-    if (!query.trim()) return []
-    return searchProducts(query.trim())
-  }, [query, searchProducts])
+  // Load featured / suggested products once when modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const fetchFeatured = async () => {
+      try {
+        const { products } = await fetchPaginatedProductsClient({ limit: 4, sortBy: "newest" })
+        if (!cancelled && products) setFeaturedProducts(products)
+      } catch (err) {
+        console.error("Failed to load suggested search products:", err)
+      }
+    }
+    fetchFeatured()
+    return () => { cancelled = true }
+  }, [isOpen])
 
-  // Featured / Suggested items for empty state
-  const featuredProducts = useMemo(() => {
-    return mappedProducts.slice(0, 4)
-  }, [mappedProducts])
+  // Debounced real-time backend search across all products (full catalog & SKU priority)
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      setLiveResults([])
+      setIsLoading(false)
+      return
+    }
+
+    const currentGen = ++searchGenRef.current
+    setIsLoading(true)
+
+    const timer = setTimeout(async () => {
+      try {
+        const { products } = await fetchPaginatedProductsClient({ search: trimmed, limit: 8 })
+        if (currentGen === searchGenRef.current) {
+          setLiveResults(products || [])
+        }
+      } catch (err) {
+        if (currentGen === searchGenRef.current) {
+          console.error("Live search failed:", err)
+        }
+      } finally {
+        if (currentGen === searchGenRef.current) {
+          setIsLoading(false)
+        }
+      }
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [query])
 
   const handleFullSearch = (searchQuery: string) => {
     const term = searchQuery.trim()

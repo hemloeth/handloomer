@@ -126,6 +126,16 @@ export function ProductFilters({
         if (data.success) {
           setColors(data.colors || [])
           setFabrics(data.materials || [])
+          if (data.counts) {
+            setCounts(data.counts)
+          }
+          if (data.priceRange) {
+            setPriceRange(data.priceRange)
+            setLocalPriceRange({
+              min: filters.priceRange?.min ?? data.priceRange.min,
+              max: filters.priceRange?.max ?? data.priceRange.max
+            })
+          }
         }
       } catch (err) {
         console.error("Failed to fetch product filters:", err)
@@ -135,7 +145,7 @@ export function ProductFilters({
   }, [])
 
   useEffect(() => {
-    if (products?.length > 0) {
+    if (products?.length > 0 && !counts) {
       setCounts(getFilterCounts(products))
 
       const newRange = getPriceRange(products)
@@ -145,7 +155,7 @@ export function ProductFilters({
         max: filters.priceRange?.max ?? newRange.max
       })
     }
-  }, [products])
+  }, [products, counts])
 
   useEffect(() => {
     setLocalPriceRange({
