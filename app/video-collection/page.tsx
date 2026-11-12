@@ -391,8 +391,8 @@ function VideoCollectionContent() {
         </section>
 
         {/* Category Filter */}
-        <section className="px-2 py-12 bg-gradient-to-br from-gray-50 via-white to-gray-100">
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+        <section className="px-4 sm:px-6 lg:px-8 py-12 bg-gradient-to-br from-gray-50 via-white to-gray-100">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
               <h2 className="font-serif text-4xl md:text-5xl mb-4 text-gray-900">
                 Browse by Category
@@ -419,8 +419,8 @@ function VideoCollectionContent() {
         </section>
 
         {/* Video Grid */}
-        <section id="video-grid" className="px-2 py-24 bg-gradient-to-br from-gray-50 via-white to-gray-100">
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+        <section id="video-grid" className="px-4 sm:px-6 lg:px-8 py-24 bg-gradient-to-br from-gray-50 via-white to-gray-100">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h2 className="font-serif text-4xl md:text-5xl mb-4 text-gray-900">
                 {selectedCategory === "All" ? "Complete Collection" : `${selectedCategory} Collection`}
@@ -467,8 +467,8 @@ function VideoCollectionContent() {
         </section>
 
         {/* Bottom CTA */}
-        <section className="px-2 pb-16 bg-gradient-to-br from-gray-50 via-white to-gray-100">
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 text-center">
+        <section className="px-4 sm:px-6 lg:px-8 pb-16 bg-gradient-to-br from-gray-50 via-white to-gray-100">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-none border border-primary/20 p-12">
               <h2 className="font-serif text-4xl mb-4 text-gray-900">
                 Discover More Collections

@@ -33,7 +33,7 @@ export function CollectionsClient() {
 
   return (
     <section className="py-16 px-2">
-      <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 flex flex-col lg:flex-row gap-8 items-start">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8 items-start">
         {/* Sidebar Filters (Desktop Only) */}
         <div className="hidden lg:block w-full lg:w-[280px] shrink-0 lg:sticky lg:top-24 h-[calc(100vh-120px)] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
           <ProductFilters

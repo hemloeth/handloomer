@@ -112,7 +112,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
 
                 {/* Skeleton loading — keeps the header and grid layout stable,
                     no full-page "Loading" text flash. */}
-                <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 py-10">
+                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
                     <div className="mb-3 h-8 w-52 rounded bg-muted animate-pulse" />
                     <div className="mb-8 h-4 w-72 rounded bg-muted/70 animate-pulse" />
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -135,7 +135,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             <main className="min-h-screen bg-background">
                 <Header />
                 <div style={{ height: "var(--header-offset)" }} />
-                <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-24 text-center">
+                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
                     <h1 className="font-serif text-3xl mb-3">Collection not found</h1>
                     <p className="text-muted-foreground mb-6">We couldn't find the collection you were looking for.</p>
                     <Link
@@ -160,7 +160,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             {/* Collections Sub-nav */}
             {key !== 'new-arrivals' && (
                 <section className="bg-secondary border-b border-border py-8">
-                    <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+                    <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-3 lg:gap-4">
                             <Link
                                 href="/collections"
@@ -188,7 +188,7 @@ export default function MarketingCollectionDetailPage({ params }: Props) {
             {/* Collection Stats/Offer Section */}
             {(collection.stats?.length > 0 || collection.offer) && (
                 <section className="py-12 bg-secondary/30 border-b border-border">
-                    <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+                    <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex flex-wrap justify-center items-center gap-12 lg:gap-24">
                             {collection.key === 'big-sale' && collection.offer && (
                                 <div className="text-center">

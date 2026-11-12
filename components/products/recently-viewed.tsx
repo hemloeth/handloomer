@@ -73,7 +73,7 @@ export function RecentlyViewed({ currentId }: { currentId: string }) {
   if (products.length === 0) return null
   return (
     <section className="py-8 sm:py-12 bg-background">
-      <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="font-serif text-2xl sm:text-3xl mb-8">Recently Viewed</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
           {products.map((p) => (

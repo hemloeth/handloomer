@@ -150,7 +150,7 @@ export function Header() {
       {/* Top Bar */}
       {isAnnouncementVisible && (
         <div className="bg-foreground text-background overflow-hidden relative">
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 py-2 pr-8 sm:pr-12">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-2 pr-8 sm:pr-12">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-4 text-center sm:text-left">
               <div className="text-[10px] sm:text-xs tracking-wide leading-tight">
                 Free Shipping on orders above ₹999 | Hassle-Free Returns within 7 Days
@@ -172,10 +172,10 @@ export function Header() {
         </div>
       )}
 
-      <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
-        <div className="flex items-center justify-between h-14 lg:h-16">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 lg:h-16 gap-4">
           {/* Left Side - Logo and Mobile Menu */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
             {/* Mobile Menu Button */}
             <button
               className="lg:hidden p-2 -ml-2"
@@ -196,25 +196,29 @@ export function Header() {
                 priority
               />
             </Link>
+          </div>
 
-            {/* Desktop Navigation Left */}
-            <nav className="hidden lg:flex flex-nowrap items-center gap-4 xl:gap-6 ml-4 2xl:ml-8">
-              {navLinks.slice(0, 4).map((link) => (
+          {/* Desktop Navigation - Centered with equal gap between items */}
+          <nav className="hidden lg:flex flex-nowrap items-center justify-center gap-5 xl:gap-7 2xl:gap-8 flex-1 min-w-0">
+            {navLinks.map((link) => {
+              const hasSubmenu = (link.submenu?.length ?? 0) > 0 || link.name === "Collections" || link.name === "Categories"
+              return (
                 <div
                   key={link.name}
                   className="relative group shrink-0"
-                  onMouseEnter={() => ((link.submenu?.length ?? 0) > 0 || link.name === "Collections" || link.name === "Categories") && setActiveSubmenu(link.name)}
+                  onMouseEnter={() => hasSubmenu && setActiveSubmenu(link.name)}
                   onMouseLeave={() => setActiveSubmenu(null)}
                 >
                   <Link
                     href={link.href}
                     className={cn(
                       "text-xs font-sans tracking-wide uppercase whitespace-nowrap text-foreground/80 hover:text-foreground transition-colors flex items-center gap-1",
-                      link.name === "Best Sellers" && "text-primary hover:text-primary/80 font-medium"
+                      link.name === "Best Sellers" && "text-primary hover:text-primary/80 font-medium",
+                      link.name === "Sale" && "text-destructive hover:text-destructive/80"
                     )}
                   >
                     {link.name}
-                    {((link.submenu?.length ?? 0) > 0 || link.name === "Collections" || link.name === "Categories") && <ChevronDown className="w-3 h-3" />}
+                    {hasSubmenu && <ChevronDown className="w-3 h-3" />}
                   </Link>
 
                   {/* Submenu */}
@@ -291,30 +295,12 @@ export function Header() {
                     </div>
                   )}
                 </div>
-              ))}
-            </nav>
-          </div>
+              )
+            })}
+          </nav>
 
-          {/* Center - Brand Name */}
-
-
-          {/* Right Side - Navigation and Icons */}
-          <div className="flex items-center gap-1 sm:gap-4 relative z-20">
-            {/* Desktop Navigation Right */}
-            <nav className="hidden lg:flex flex-nowrap items-center gap-4 xl:gap-6">
-              {navLinks.slice(4).map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className={cn(
-                    "text-xs font-sans tracking-wide uppercase whitespace-nowrap text-foreground/80 hover:text-foreground transition-colors",
-                    link.name === "Sale" && "text-destructive hover:text-destructive/80"
-                  )}
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </nav>
+          {/* Right Side - Icons */}
+          <div className="flex items-center gap-1 sm:gap-4 relative z-20 shrink-0">
 
             {/* Icons */}
             <div className="flex items-center gap-0.5 sm:gap-2">

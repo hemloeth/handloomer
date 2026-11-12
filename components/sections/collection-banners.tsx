@@ -113,7 +113,7 @@ export function CollectionBanners() {
 
         {/* Related Festive Highlights */}
         {displayFestiveProducts.length > 0 && (
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 pt-2">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 pt-2">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
               <div>
                 <p className="text-xs sm:text-sm tracking-[0.2em] uppercase text-primary font-semibold mb-1">
@@ -208,7 +208,7 @@ export function CollectionBanners() {
 
         {/* Related Big Sale Highlights */}
         {displaySaleProducts.length > 0 && (
-          <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 pt-2">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 pt-2">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
               <div>
                 <p className="text-xs sm:text-sm tracking-[0.2em] uppercase text-primary font-semibold mb-1">

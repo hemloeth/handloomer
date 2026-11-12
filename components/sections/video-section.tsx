@@ -234,7 +234,7 @@ export function VideoSection() {
 
   return (
     <section className="py-16 md:py-20 bg-gradient-to-br from-background to-secondary/30">
-      <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-12">
           <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl font-light tracking-tight text-foreground mb-3">

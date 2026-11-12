@@ -20,7 +20,7 @@ export function NewCollections({ initialProducts = [] }: { initialProducts?: Pro
 
   return (
     <section className="py-16 md:py-20 bg-background">
-      <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
           <div>

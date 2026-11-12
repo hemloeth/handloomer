@@ -37,7 +37,7 @@ export default function AllCategoriesPage() {
             {/* Hero Section */}
             <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
                 <div className="absolute inset-0 bg-secondary/30 -z-10" />
-                <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 flex flex-col items-center text-center">
+                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center">
                     <div className="max-w-3xl flex flex-col items-center">
                         <motion.div 
                             initial={{ opacity: 0, y: 20 }}
@@ -70,7 +70,7 @@ export default function AllCategoriesPage() {
 
             {/* Categories Grid */}
             <section className="pb-24 px-2">
-                <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
                     {isLoading ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                             {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -128,7 +128,7 @@ export default function AllCategoriesPage() {
 
             {/* Call to Action */}
             <section className="py-20 bg-secondary/50">
-                <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 text-center">
+                <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 text-center">
                     <h2 className="text-3xl font-serif mb-4">Can't decide?</h2>
                     <p className="text-muted-foreground mb-8">Browse our entire catalog of premium linen sarees and find your signature style.</p>
                     <Link 

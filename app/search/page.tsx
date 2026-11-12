@@ -151,7 +151,7 @@ function SearchContent() {
 
       {/* Main Content */}
       <div className="bg-background py-10 lg:py-16" style={query ? { marginTop: "var(--header-offset)" } : undefined}>
-        <div className="max-w-[1500px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16">
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top Search Bar & Header */}
           <div className="max-w-3xl mx-auto mb-10 text-center">
             {query && (

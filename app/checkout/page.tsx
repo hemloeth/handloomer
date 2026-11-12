@@ -1470,7 +1470,7 @@ export default function CheckoutPage() {
       <Header />
 
       <div style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}>
-        <section className="pb-8 lg:pb-12 px-4 md:px-8 lg:px-12 xl:px-16">
+        <section className="pb-8 lg:pb-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-[1200px] mx-auto">
             {/* Back Link */}
             <Link

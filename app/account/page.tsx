@@ -91,7 +91,7 @@ export default function AccountPage() {
       <Header />
 
       <div 
-        className="flex-1 px-4 md:px-8 pb-16"
+        className="flex-1 px-4 sm:px-6 lg:px-8 pb-16"
         style={{ paddingTop: 'calc(var(--header-offset) + 2rem)' }}
       >
         <div className="max-w-[1100px] mx-auto">
