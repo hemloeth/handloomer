@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { apiPost, apiPut, setApiDedupeScope } from "@/lib/api"
+import { apiGet, apiPost, apiPut, setApiDedupeScope } from "@/lib/api"
 
 interface User {
     _id?: string
@@ -35,27 +35,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setApiDedupeScope(user?._id ? String(user._id) : "anon")
     }, [user])
 
-    // Load user from localStorage on mount
+    // Authenticated session restoration on mount:
+    // Never treat unverified cached profile data as proof of authentication.
+    // Call GET /api/user/profile to verify token validity, expiration, and revocation.
     useEffect(() => {
-        const savedUser = localStorage.getItem("auth_user")
-        if (savedUser) {
-            try {
-                const parsed = JSON.parse(savedUser)
-                setUser({ _id: parsed._id, name: parsed.name, email: parsed.email, phone: parsed.phone })
-            } catch {
-                setUser(null)
+        let isMounted = true;
+
+        const restoreSession = async () => {
+            const token = typeof window !== 'undefined' ? localStorage.getItem("user_token") : null;
+            if (!token) {
+                if (isMounted) {
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem("auth_user");
+                    }
+                    setUser(null);
+                    setIsHydrated(true);
+                }
+                return;
             }
-        }
-        setIsHydrated(true)
+
+            try {
+                // Authoritatively verify session with the backend profile endpoint
+                const data = await apiGet('/api/user/profile');
+                const profileUser = data?.user || (data?._id ? data : null);
+
+                if (isMounted) {
+                    if (profileUser && profileUser._id) {
+                        const verifiedUser: User = {
+                            _id: profileUser._id,
+                            name: profileUser.name,
+                            email: profileUser.email,
+                            phone: profileUser.phone,
+                        };
+                        setUser(verifiedUser);
+                        if (typeof window !== 'undefined') {
+                            localStorage.setItem("auth_user", JSON.stringify(verifiedUser));
+                        }
+                    } else {
+                        // Empty or unrecognized profile payload
+                        setUser(null);
+                        if (typeof window !== 'undefined') {
+                            localStorage.removeItem("auth_user");
+                            localStorage.removeItem("user_token");
+                        }
+                    }
+                }
+            } catch (err: any) {
+                // Session expired, revoked, invalid, or 401/403
+                if (isMounted) {
+                    setUser(null);
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem("auth_user");
+                        localStorage.removeItem("user_token");
+                    }
+                }
+            } finally {
+                if (isMounted) {
+                    setIsHydrated(true);
+                }
+            }
+        };
+
+        restoreSession();
 
         const handleSessionExpired = () => {
-            setUser(null)
-            localStorage.removeItem("auth_user")
-            localStorage.removeItem("user_token")
-        }
-        window.addEventListener("auth:session_expired", handleSessionExpired)
-        return () => window.removeEventListener("auth:session_expired", handleSessionExpired)
-    }, [])
+            setUser(null);
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem("auth_user");
+                localStorage.removeItem("user_token");
+            }
+        };
+        window.addEventListener("auth:session_expired", handleSessionExpired);
+        return () => {
+            isMounted = false;
+            window.removeEventListener("auth:session_expired", handleSessionExpired);
+        };
+    }, []);
 
     const signup = async (name: string, email: string, phone: string, password: string) => {
         try {
@@ -63,8 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             const userData = { _id: data._id, name: data.name, email: data.email, phone: data.phone }
             setUser(userData)
-            localStorage.setItem("auth_user", JSON.stringify(userData));
-            if (data.token) { localStorage.setItem("user_token", data.token); }
+            if (typeof window !== 'undefined') {
+                localStorage.setItem("auth_user", JSON.stringify(userData));
+                if (data.token) { localStorage.setItem("user_token", data.token); }
+            }
 
             // Signal cart/wishlist to sync
             setLoginEvent(prev => prev + 1)
@@ -79,10 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             const data = await apiPost('/api/user/login', { email, password })
 
-            const userData = { _id: data.user._id, name: data.user.name, email: data.user.email, phone: data.user.phone }
+            const userObj = data.user || data;
+            const userData = { _id: userObj._id, name: userObj.name, email: userObj.email, phone: userObj.phone }
             setUser(userData)
-            localStorage.setItem("auth_user", JSON.stringify(userData));
-            if (data.token) { localStorage.setItem("user_token", data.token); }
+            if (typeof window !== 'undefined') {
+                localStorage.setItem("auth_user", JSON.stringify(userData));
+                if (data.token) { localStorage.setItem("user_token", data.token); }
+            }
 
             // Signal cart/wishlist to sync
             setLoginEvent(prev => prev + 1)
@@ -100,8 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error("Logout API failed:", error)
         }
         setUser(null)
-        localStorage.removeItem("auth_user");
-        localStorage.removeItem("user_token");
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem("auth_user");
+            localStorage.removeItem("user_token");
+        }
     }
 
     const updateProfile = async (data: Partial<User>) => {
@@ -114,7 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const updatedUser = { ...user, ...data }
         setUser(updatedUser)
-        localStorage.setItem("auth_user", JSON.stringify(updatedUser))
+        if (typeof window !== 'undefined') {
+            localStorage.setItem("auth_user", JSON.stringify(updatedUser))
+        }
     }
 
     return (

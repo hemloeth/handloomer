@@ -600,24 +600,56 @@ export default function CheckoutPage() {
         })
         if (res?.success) {
           toast.success(`Order #${orderId} cancelled and reserved items returned to store.`)
-        } else if (res?.code === "PAYMENT_CAPTURED") {
-          toast.info("A payment was detected for this order. Verification is in progress.")
-          await recheckPending()
+          transitionToTerminal("Previous checkout reset. You can now adjust your cart or details and place a fresh order.")
           return
         }
       } catch (err: any) {
-        toast.error(err?.message || "Could not cancel pending order with the store.")
+        const code = err?.data?.code || ""
+        const status = err?.status || 0
+
+        // If backend reports payment was captured (HTTP 409 PAYMENT_CAPTURED)
+        if (status === 409 && (code === "PAYMENT_CAPTURED" || !code)) {
+          toast.info("A payment was detected for this order. Checking payment status...")
+          await recheckPending()
+          return
+        }
+
+        // If payment held for review (HTTP 409 PAYMENT_HELD)
+        if (status === 409 && code === "PAYMENT_HELD") {
+          transitionToHeld(err?.data?.message || "Order held for review.")
+          return
+        }
+
+        // If gateway unavailable or timed out (HTTP 503)
+        if (status === 503 || code === "GATEWAY_UNAVAILABLE" || code === "GATEWAY_TIMEOUT" || code === "RECONCILIATION_ERROR") {
+          toast.error(err?.data?.message || err?.message || "Payment gateway is currently unreachable. Order and reserved items have been preserved.")
+          return
+        }
+
+        // For any other error (network blip, transient 5xx): FAIL CLOSED, do not clear the attempt!
+        toast.error(err?.message || "Could not cancel pending order with the store. Checkout attempt preserved.")
+        return
       } finally {
         setIsAbandoningOrder(false)
       }
+    } else {
+      // No active order found, safe to reset
+      transitionToTerminal("Session reset. You can now start a fresh checkout.")
     }
-
-    transitionToTerminal("Previous checkout reset. You can now adjust your cart or details and place a fresh order.")
   }
 
   const handleLeavePendingAndStartFresh = () => {
     const a = loadAttempt(scope)
     const orderId = pendingOrder?.orderId || a?.orderId
+    if (orderId && a?.paymentStatus === "paid") {
+      toast.info("Your order payment has been confirmed.")
+      finalizeSuccess(orderId, a?.purchasedLines)
+      return
+    }
+    if (a?.phase === "awaiting_verify") {
+      toast.warning("Payment verification is still in progress. Please re-check before starting a fresh checkout.")
+      return
+    }
     if (orderId) {
       toast.info(`Note: Order #${orderId} will remain reserved until the ~15 minute payment window expires, after which it will automatically be released.`)
     }

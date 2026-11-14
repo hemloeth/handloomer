@@ -15,6 +15,9 @@
 const DEV_API_PORT = process.env.NEXT_PUBLIC_API_PORT || '5000';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://sareeghar.com' : (typeof window !== 'undefined' ? `http://${window.location.hostname}:${DEV_API_PORT}` : 'http://127.0.0.1:5000'));
 
+// Canonical store identity for Handloomer frontend
+export const STORE_ID = 'handloomer';
+
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
@@ -174,6 +177,9 @@ function buildHeaders(customHeaders?: Record<string, string>, isFormData = false
         Object.assign(headers, customHeaders);
     }
 
+    // Always enforce canonical Handloomer store context. Disallow caller overrides.
+    headers['X-Store-Id'] = STORE_ID;
+
     return headers;
 }
 
@@ -321,6 +327,17 @@ async function request<T = any>(
                 },
             };
         }
+    }
+
+    // Lock canonical store ID on all outgoing requests
+    if (options.headers) {
+        if (options.headers instanceof Headers) {
+            options.headers.set('X-Store-Id', STORE_ID);
+        } else {
+            (options.headers as Record<string, string>)['X-Store-Id'] = STORE_ID;
+        }
+    } else {
+        options.headers = { 'X-Store-Id': STORE_ID };
     }
 
     let lastError: Error | null = null;
@@ -553,7 +570,11 @@ export async function apiServerGet<T = any>(
 
     const fetchOptions: RequestInit & { next?: { revalidate?: number } } = {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Store-Id': STORE_ID,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
     };
 
     if (config?.cache) {
