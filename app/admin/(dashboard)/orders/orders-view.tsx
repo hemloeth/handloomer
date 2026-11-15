@@ -150,9 +150,16 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
   const formatStatus = (status: string) =>
     status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
 
-  // Store identity badge derived strictly from trusted order.storeId
-  const renderStoreBadge = (storeId?: string) => {
-    const normalized = (storeId || "").trim().toLowerCase()
+  // Store identity badge derived strictly from trusted order.storeId (with fallback to canonical prefix)
+  const renderStoreBadge = (storeId?: string, orderId?: string) => {
+    let normalized = (storeId || "").trim().toLowerCase()
+    if (!normalized || normalized === "unknown") {
+      if (orderId && orderId.toUpperCase().startsWith("LS-")) {
+        normalized = "linen"
+      } else if (orderId && orderId.toUpperCase().startsWith("HL-")) {
+        normalized = "handloomer"
+      }
+    }
     if (normalized === "handloomer") {
       return (
         <span
@@ -360,7 +367,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
               filteredOrders.map((order) => (
                 <TableRow key={order._id}>
                   <TableCell className="font-medium font-mono text-xs whitespace-nowrap">{order.orderId}</TableCell>
-                  <TableCell className="whitespace-nowrap">{renderStoreBadge(order.storeId)}</TableCell>
+                  <TableCell className="whitespace-nowrap">{renderStoreBadge(order.storeId, order.orderId)}</TableCell>
                   <TableCell>
                     <div>
                       <div className="font-medium">{getCustomerName(order)}</div>
@@ -580,7 +587,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                 <div>
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <h2 className="text-2xl font-serif font-bold text-primary">{viewOrder.orderId}</h2>
-                    {renderStoreBadge(viewOrder.storeId)}
+                    {renderStoreBadge(viewOrder.storeId, viewOrder.orderId)}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {new Date(viewOrder.createdAt).toLocaleString("en-IN")}

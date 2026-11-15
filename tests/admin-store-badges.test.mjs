@@ -37,7 +37,7 @@ test("Part 1: Multi-Store Admin Orders Badge & Interface Verification", async (t
   await t.test("3. Table body renders store badge cell directly beside Order ID cell", () => {
     assert.match(
       viewContent,
-      /<TableCell[^>]*>\{order\.orderId\}<\/TableCell>\s*<TableCell[^>]*>\{renderStoreBadge\(order\.storeId\)\}<\/TableCell>/s,
+      /<TableCell[^>]*>\{order\.orderId\}<\/TableCell>\s*<TableCell[^>]*>\{renderStoreBadge\(order\.storeId[^)]*\)\}<\/TableCell>/s,
       "Store badge must be rendered in its dedicated column beside orderId"
     );
   });
@@ -68,7 +68,7 @@ test("Part 1: Multi-Store Admin Orders Badge & Interface Verification", async (t
   await t.test("8. Order Detail modal displays store badge beside Order ID in header", () => {
     assert.match(
       viewContent,
-      /<h2[^>]*>\{viewOrder\.orderId\}<\/h2>\s*\{renderStoreBadge\(viewOrder\.storeId\)\}/s,
+      /<h2[^>]*>\{viewOrder\.orderId\}<\/h2>\s*\{renderStoreBadge\(viewOrder\.storeId[^)]*\)\}/s,
       "Order Details modal must display the store badge directly beside viewOrder.orderId"
     );
   });
