@@ -150,6 +150,42 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
   const formatStatus = (status: string) =>
     status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
 
+  // Store identity badge derived strictly from trusted order.storeId
+  const renderStoreBadge = (storeId?: string) => {
+    const normalized = (storeId || "").trim().toLowerCase()
+    if (normalized === "handloomer") {
+      return (
+        <span
+          className="inline-flex items-center rounded-full border border-amber-900/20 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300 shrink-0"
+          title="Store: Handloomer"
+          aria-label="Store: Handloomer"
+        >
+          Handloomer
+        </span>
+      )
+    }
+    if (normalized === "linen") {
+      return (
+        <span
+          className="inline-flex items-center rounded-full border border-teal-900/20 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-900 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-300 shrink-0"
+          title="Store: Linen"
+          aria-label="Store: Linen"
+        >
+          Linen
+        </span>
+      )
+    }
+    return (
+      <span
+        className="inline-flex items-center rounded-full border border-muted-foreground/30 bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground shrink-0"
+        title="Store: Unknown / Legacy origin"
+        aria-label="Store: Unknown Store"
+      >
+        Unknown Store
+      </span>
+    )
+  }
+
   if (loading && orders.length === 0 && !fetchError) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -277,6 +313,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Order ID</TableHead>
+              <TableHead className="whitespace-nowrap">Store</TableHead>
               <TableHead className="whitespace-nowrap">Customer</TableHead>
               <TableHead className="whitespace-nowrap">Date</TableHead>
               <TableHead className="whitespace-nowrap">Items</TableHead>
@@ -291,7 +328,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             {filteredOrders.length === 0 ? (
               fetchError ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <div className="flex flex-col items-center gap-3">
                       <p className="text-sm text-destructive">{fetchError}</p>
                       {fetchErrorStatus === 401 || fetchErrorStatus === 403 ? (
@@ -314,7 +351,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                 </TableRow>
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     {searchTerm || statusFilter ? "No matching orders" : "No orders yet"}
                   </TableCell>
                 </TableRow>
@@ -323,6 +360,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
               filteredOrders.map((order) => (
                 <TableRow key={order._id}>
                   <TableCell className="font-medium font-mono text-xs whitespace-nowrap">{order.orderId}</TableCell>
+                  <TableCell className="whitespace-nowrap">{renderStoreBadge(order.storeId)}</TableCell>
                   <TableCell>
                     <div>
                       <div className="font-medium">{getCustomerName(order)}</div>
@@ -540,7 +578,10 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             <div className="p-6 md:p-8 space-y-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <h2 className="text-2xl font-serif font-bold text-primary">{viewOrder.orderId}</h2>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-2xl font-serif font-bold text-primary">{viewOrder.orderId}</h2>
+                    {renderStoreBadge(viewOrder.storeId)}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     {new Date(viewOrder.createdAt).toLocaleString("en-IN")}
                   </p>

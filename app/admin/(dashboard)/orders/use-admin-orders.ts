@@ -8,6 +8,7 @@ import { toast } from "sonner"
 export interface AdminOrder {
   _id: string
   orderId: string
+  storeId?: string
   createdAt: string
   user?: { name?: string; email?: string }
   shippingAddress?: {
