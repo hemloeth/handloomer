@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useRef } from "react"
 import {
   Table,
   TableBody,
@@ -17,8 +18,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, Loader2, X, Package, ExternalLink } from "lucide-react"
+import { MoreHorizontal, Search, Loader2, X, Package, ExternalLink, Copy, Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 import { resolveMediaUrl } from "@/lib/media"
 import Link from "next/link"
 import { useAdminOrders, type AdminOrder } from "./use-admin-orders"
@@ -87,6 +89,51 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
     isOutdated,
     hasQueryMismatch,
   } = controller
+
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const copyToClipboard = (text?: string, label = "Item") => {
+    if (!text) return
+    const key = `${label.toLowerCase().includes("sku") ? "sku" : "order"}-${text}`
+
+    const markCopied = () => {
+      setCopiedKey(key)
+      toast.success(`${label} copied: ${text}`)
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = setTimeout(() => setCopiedKey(null), 2000)
+    }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(markCopied).catch(() => {
+        fallbackCopy(text, label, markCopied)
+      })
+    } else {
+      fallbackCopy(text, label, markCopied)
+    }
+  }
+
+  const fallbackCopy = (text: string, label: string, onSuccess: () => void) => {
+    try {
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.style.position = "fixed"
+      textArea.style.left = "-9999px"
+      textArea.style.top = "-9999px"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      const successful = document.execCommand("copy")
+      document.body.removeChild(textArea)
+      if (successful) {
+        onSuccess()
+      } else {
+        toast.error(`Could not copy ${label}`)
+      }
+    } catch {
+      toast.error(`Could not copy ${label}`)
+    }
+  }
 
   // Resolve the real customer name from the shipping address (falls back to account user)
   const getCustomerName = (order: AdminOrder) => {
@@ -320,7 +367,6 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Order ID</TableHead>
-              <TableHead className="whitespace-nowrap">Store</TableHead>
               <TableHead className="whitespace-nowrap">Customer</TableHead>
               <TableHead className="whitespace-nowrap">Date</TableHead>
               <TableHead className="whitespace-nowrap">Items</TableHead>
@@ -335,7 +381,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             {filteredOrders.length === 0 ? (
               fetchError ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <div className="flex flex-col items-center gap-3">
                       <p className="text-sm text-destructive">{fetchError}</p>
                       {fetchErrorStatus === 401 || fetchErrorStatus === 403 ? (
@@ -358,7 +404,7 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                 </TableRow>
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     {searchTerm || statusFilter ? "No matching orders" : "No orders yet"}
                   </TableCell>
                 </TableRow>
@@ -366,8 +412,30 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             ) : (
               filteredOrders.map((order) => (
                 <TableRow key={order._id}>
-                  <TableCell className="font-medium font-mono text-xs whitespace-nowrap">{order.orderId}</TableCell>
-                  <TableCell className="whitespace-nowrap">{renderStoreBadge(order.storeId, order.orderId)}</TableCell>
+                  <TableCell className="align-top whitespace-nowrap">
+                    <div className="flex flex-col items-start gap-1">
+                      {renderStoreBadge(order.storeId, order.orderId)}
+                      <div className="flex items-center gap-1.5 group/oid">
+                        <span className="font-medium font-mono text-xs text-foreground">{order.orderId}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            copyToClipboard(order.orderId, "Order ID")
+                          }}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          title="Copy Order ID"
+                          aria-label={`Copy Order ID ${order.orderId}`}
+                        >
+                          {copiedKey === `order-${order.orderId}` ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 opacity-60 group-hover/oid:opacity-100 transition-opacity" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div>
                       <div className="font-medium">{getCustomerName(order)}</div>
@@ -401,8 +469,28 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                             <div className="font-medium truncate text-xs leading-tight" title={item.name}>
                               <span className="text-primary font-bold">{item.quantity}x</span> {item.name}
                             </div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5 flex justify-between">
-                              <span>{item.sku ? `SKU: ${item.sku}` : ""}</span>
+                            <div className="text-[10px] text-muted-foreground mt-0.5 flex justify-between items-center gap-1">
+                              {item.sku ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    copyToClipboard(item.sku, "SKU")
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted px-1 py-0.5 rounded transition-colors group/sku cursor-pointer font-mono"
+                                  title="Click to copy SKU"
+                                  aria-label={`Copy SKU ${item.sku}`}
+                                >
+                                  <span>SKU: {item.sku}</span>
+                                  {copiedKey === `sku-${item.sku}` ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5 opacity-50 group-hover/sku:opacity-100 transition-opacity" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span />
+                              )}
                               <span>₹{item.price?.toLocaleString("en-IN")}</span>
                             </div>
                           </div>
@@ -585,11 +673,26 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             <div className="p-6 md:p-8 space-y-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h2 className="text-2xl font-serif font-bold text-primary">{viewOrder.orderId}</h2>
+                  <div className="flex flex-col items-start gap-1">
                     {renderStoreBadge(viewOrder.storeId, viewOrder.orderId)}
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-serif font-bold text-primary font-mono">{viewOrder.orderId}</h2>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(viewOrder.orderId, "Order ID")}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Copy Order ID"
+                        aria-label={`Copy Order ID ${viewOrder.orderId}`}
+                      >
+                        {copiedKey === `order-${viewOrder.orderId}` ? (
+                          <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {new Date(viewOrder.createdAt).toLocaleString("en-IN")}
                   </p>
                 </div>
@@ -680,7 +783,22 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{item.quantity}x {item.name}</div>
-                        {item.sku && <div className="text-[11px] text-muted-foreground">SKU: {item.sku}</div>}
+                        {item.sku && (
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(item.sku, "SKU")}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted px-1.5 py-0.5 rounded transition-colors group/sku cursor-pointer mt-0.5 font-mono"
+                            title="Click to copy SKU"
+                            aria-label={`Copy SKU ${item.sku}`}
+                          >
+                            <span>SKU: {item.sku}</span>
+                            {copiedKey === `sku-${item.sku}` ? (
+                              <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 opacity-60 group-hover/sku:opacity-100 transition-opacity" />
+                            )}
+                          </button>
+                        )}
                       </div>
                       <div className="text-sm">₹{(item.price * item.quantity).toLocaleString("en-IN")}</div>
                     </div>
