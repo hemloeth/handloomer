@@ -249,14 +249,14 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-bold tracking-tight font-serif text-primary">Orders</h2>
+    <div className="space-y-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="shrink-0">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-xl font-bold tracking-tight font-serif text-primary">Orders</h2>
             {loading && orders.length > 0 && (
               <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> Updating...
+                <Loader2 className="w-3 h-3 animate-spin text-primary" /> Updating...
               </span>
             )}
             {isOutdated && (
@@ -265,13 +265,47 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
               </Badge>
             )}
           </div>
-          <p className="text-muted-foreground">Manage and track customer orders.</p>
+          <p className="text-xs text-muted-foreground">Manage and track customer orders.</p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 flex-1 max-w-2xl lg:mx-4">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search orders..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+                placeholder="Paste SKU and press Enter..." 
+                className="pl-8 h-9 text-sm bg-muted/30 border-muted hover:border-primary/30 focus-visible:ring-1 focus-visible:ring-primary shadow-sm"
+                value={skuQuery}
+                onChange={(e) => {
+                    setSkuQuery(e.target.value)
+                    if (skuNoResult) setSkuNoResult(false)
+                }}
+                onKeyDown={handleSkuSearch}
+            />
+            {isSearchingSku && (
+                <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 text-primary animate-spin" />
+            )}
+            {skuNoResult && (
+                <span className="absolute -bottom-5 left-2 text-[10px] text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                    No product found
+                </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2 shrink-0">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-input rounded-md bg-background text-sm"
+            className="h-9 px-3 border border-input rounded-md bg-background text-sm"
           >
             <option value="">All Statuses</option>
             <option value="placed">Placed</option>
@@ -285,39 +319,6 @@ export function AdminOrdersView({ controller }: AdminOrdersViewProps) {
             <option value="returned">Returned</option>
             <option value="hold">On Hold</option>
           </select>
-        </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row md:items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search orders..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-              placeholder="Paste SKU and press Enter..." 
-              className="pl-8 bg-muted/30 border-muted hover:border-primary/30 focus-visible:ring-1 focus-visible:ring-primary shadow-sm"
-              value={skuQuery}
-              onChange={(e) => {
-                  setSkuQuery(e.target.value)
-                  if (skuNoResult) setSkuNoResult(false)
-              }}
-              onKeyDown={handleSkuSearch}
-          />
-          {isSearchingSku && (
-              <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 text-primary animate-spin" />
-          )}
-          {skuNoResult && (
-              <span className="absolute -bottom-5 left-2 text-[10px] text-destructive font-medium animate-in fade-in slide-in-from-top-1">
-                  No product found
-              </span>
-          )}
         </div>
       </div>
 
